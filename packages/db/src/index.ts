@@ -293,3 +293,5 @@ export type { EvidencePackage, SaveAuditRunInput } from "./audit-runs";
 export { getEvidencePackage, saveAuditRun } from "./audit-runs";
 export type { AuthRepository, AuthSession, AuthUser, AuthWorkspace, MagicLink } from "./auth";
 export { createAuthRepository } from "./auth";
+export type { BillingRepository, UpdateWorkspaceBillingInput, WorkspaceBilling } from "./billing";
+export { createBillingRepository } from "./billing";
