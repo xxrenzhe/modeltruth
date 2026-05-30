@@ -17,6 +17,7 @@ const dictionaries = {
       providers: "Providers",
       methodology: "Methodology",
       pricing: "Pricing",
+      workspace: "Workspace",
       login: "Log in"
     },
     home: {
@@ -45,6 +46,21 @@ const dictionaries = {
       submit: "Send magic link",
       success: "Magic link created. Open this verification URL to start your session."
     },
+    workspace: {
+      eyebrow: "Pro Workspace",
+      title: "Monitor private AI API nodes.",
+      lede: "Save encrypted provider keys, schedule heartbeat audits and build evidence history for disputes.",
+      name: "Node name",
+      baseUrl: "Base URL",
+      modelId: "Target model",
+      apiKey: "API key",
+      heartbeat: "Heartbeat seconds",
+      deepAudit: "Deep audit seconds",
+      create: "Create monitored node",
+      empty: "No private nodes yet.",
+      loginRequired: "Log in to manage workspace nodes.",
+      refresh: "Refresh nodes"
+    },
     providers: [
       { slug: "openai", name: "OpenAI", status: "pass" },
       { slug: "anthropic", name: "Anthropic", status: "pass" },
@@ -61,6 +77,7 @@ const dictionaries = {
       providers: "供应商",
       methodology: "方法论",
       pricing: "价格",
+      workspace: "Workspace",
       login: "登录"
     },
     home: {
@@ -88,6 +105,21 @@ const dictionaries = {
       email: "工作邮箱",
       submit: "发送登录链接",
       success: "登录链接已创建。打开下面的验证地址即可开始会话。"
+    },
+    workspace: {
+      eyebrow: "Pro Workspace",
+      title: "监控私有 AI API 节点。",
+      lede: "保存加密后的供应商密钥，按计划执行心跳审计，并为争议生成证据历史。",
+      name: "节点名称",
+      baseUrl: "Base URL",
+      modelId: "目标模型",
+      apiKey: "API Key",
+      heartbeat: "心跳间隔秒数",
+      deepAudit: "深度审计秒数",
+      create: "创建监控节点",
+      empty: "还没有私有节点。",
+      loginRequired: "登录后管理 Workspace 节点。",
+      refresh: "刷新节点"
     },
     providers: [
       { slug: "openai", name: "OpenAI", status: "pass" },

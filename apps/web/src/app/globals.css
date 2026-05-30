@@ -64,6 +64,10 @@ a {
   align-items: center;
 }
 
+.compactHero {
+  grid-template-columns: 1fr;
+}
+
 .eyebrow {
   color: var(--accent-dark);
   font-size: 0.78rem;
@@ -130,6 +134,14 @@ h1 {
   margin-top: 48px;
 }
 
+.workspaceGrid {
+  align-items: start;
+  display: grid;
+  gap: 22px;
+  grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.15fr);
+  margin-top: 32px;
+}
+
 .metric {
   background: rgba(255, 250, 241, 0.62);
   border: 1px solid var(--line);
@@ -146,6 +158,12 @@ h1 {
 .formGrid {
   display: grid;
   gap: 14px;
+}
+
+.twoColumn {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, 1fr);
 }
 
 input,
@@ -196,6 +214,36 @@ label {
   padding-top: 12px;
 }
 
+.nodeCard {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+}
+
+.nodeCard p {
+  color: var(--muted);
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.nodeCard dl {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, 1fr);
+  margin: 0;
+}
+
+.nodeCard dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.nodeCard dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
 .pill {
   border-radius: 999px;
   font-size: 0.78rem;
@@ -223,7 +271,10 @@ label {
   }
 
   .hero,
-  .metricGrid {
+  .metricGrid,
+  .workspaceGrid,
+  .twoColumn,
+  .nodeCard dl {
     grid-template-columns: 1fr;
   }
 }
