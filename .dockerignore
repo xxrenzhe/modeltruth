@@ -1,0 +1,28 @@
+# Private/local project documents
+docs/
+oldcode/
+secrets/
+claudedocs/
+
+# VCS and agent metadata
+.git/
+.dolt/
+.beads/embeddeddolt/
+
+# Node and build outputs
+node_modules/
+.next/
+out/
+build/
+dist/
+coverage/
+
+# Logs and local env
+*.log
+.env
+.env.*
+
+# OS/editor noise
+.DS_Store
+.vscode/
+.idea/

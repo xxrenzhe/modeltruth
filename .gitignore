@@ -1,0 +1,11 @@
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+
+# Project-private documentation and sensitive local assets
+docs/
+oldcode/
+secrets/
+claudedocs/

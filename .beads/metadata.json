@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "modeltruth",
+  "project_id": "ed36940d-89df-4c96-be5d-e6768431ef9c"
+}
