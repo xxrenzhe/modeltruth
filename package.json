@@ -1,0 +1,39 @@
+{
+  "name": "modeltruth",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm -w @modeltruth/web run dev",
+    "build": "npm run db:init && npm -w @modeltruth/web run build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "verify": "npm run typecheck && npm run test && npm run build",
+    "db:init": "tsx scripts/db-init.ts",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:validate": "tsx scripts/validate-db-schema.ts",
+    "healthcheck": "tsx scripts/healthcheck.ts"
+  },
+  "dependencies": {
+    "next": "^15.3.3",
+    "postgres": "^3.4.7",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zod": "^3.25.67"
+  },
+  "overrides": {
+    "postcss": "^8.5.15"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.31",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

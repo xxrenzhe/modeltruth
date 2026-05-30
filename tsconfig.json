@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "baseUrl": ".",
+    "paths": {
+      "@modeltruth/audit-engine": ["packages/audit-engine/src/index.ts"],
+      "@modeltruth/config": ["packages/config/src/index.ts"],
+      "@modeltruth/crypto": ["packages/crypto/src/index.ts"],
+      "@modeltruth/db": ["packages/db/src/index.ts"],
+      "@modeltruth/i18n": ["packages/i18n/src/index.ts"],
+      "@modeltruth/seo": ["packages/seo/src/index.ts"],
+      "@modeltruth/shared": ["packages/shared/src/index.ts"]
+    }
+  },
+  "include": [
+    "apps/**/*.ts",
+    "apps/**/*.tsx",
+    "packages/**/*.ts",
+    "scripts/**/*.ts",
+    "vitest.config.ts",
+    "next-env.d.ts"
+  ],
+  "exclude": ["node_modules", ".next", "dist", "coverage"]
+}

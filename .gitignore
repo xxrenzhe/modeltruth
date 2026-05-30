@@ -65,3 +65,4 @@ Thumbs.db
 .cursor/
 .claude/
 .kiro/
+.playwright-mcp/
