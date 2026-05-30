@@ -12,7 +12,7 @@ export async function runWorkerTick() {
     try {
       await runSmokeAudit({
         baseUrl: "https://api.example.com/v1",
-        apiKey: "sk-worker-placeholder",
+        apiKey: "worker-placeholder-key",
         model: "gpt-5.1",
         suiteId: job.type === "deepAudit" ? "reasoning-lite@1.0.0" : "smoke@1.0.0"
       });

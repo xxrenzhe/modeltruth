@@ -174,3 +174,7 @@ create table if not exists migration_history (
 export { splitSqlStatements };
 export type { ClaimJobInput, EnqueueJobInput, JobRecord, JobRepository, JobStatus, JobType } from "./jobs";
 export { createJobRepository, SqliteJobRepository } from "./jobs";
+export type { ProviderNodeRecord, ProviderNodeRepository } from "./provider-nodes";
+export { createProviderNodeRepository } from "./provider-nodes";
+export type { EvidencePackage } from "./audit-runs";
+export { getEvidencePackage } from "./audit-runs";
