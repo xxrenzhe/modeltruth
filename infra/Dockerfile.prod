@@ -30,7 +30,8 @@ COPY --from=builder /app/migrations ./migrations
 COPY --from=builder /app/pg-migrations ./pg-migrations
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/infra/supervisord.conf ./infra/supervisord.conf
+COPY --from=builder /app/infra/docker-entrypoint.sh ./infra/docker-entrypoint.sh
 RUN chown -R modeltruth:modeltruth /app /var/log
 USER modeltruth
 EXPOSE 80
-CMD ["sh", "-c", "node --import tsx scripts/db-init.ts && supervisord -c infra/supervisord.conf"]
+CMD ["sh", "infra/docker-entrypoint.sh"]
