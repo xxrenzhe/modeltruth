@@ -31,6 +31,10 @@ describe("ProviderNodeRepository", () => {
       apiKeySuffix: getSecretSuffix("sk-test-node-123456")
     });
     const nodes = await repo.list(sessionResult!.session.workspace.id);
+    const secretNode = await repo.getForAudit(node.id);
+    const dueNodes = await repo.listDueForSchedule(new Date());
+    await repo.markScheduled(node.id, "heartbeat", new Date(Date.now() + 60_000));
+    const dueAfterHeartbeat = await repo.listDueForSchedule(new Date());
     await repo.close();
     if (previousPath === undefined) delete process.env.DATABASE_PATH;
     else process.env.DATABASE_PATH = previousPath;
@@ -38,6 +42,9 @@ describe("ProviderNodeRepository", () => {
 
     expect(node.apiKeySuffix).toBe("3456");
     expect(JSON.stringify(nodes)).not.toContain("sk-test-node");
+    expect(secretNode?.encryptedApiKey).toBeTruthy();
+    expect(dueNodes.map((item) => item.id)).toContain(node.id);
+    expect(dueAfterHeartbeat.map((item) => item.id)).toContain(node.id);
     expect(nodes).toHaveLength(1);
   });
 });

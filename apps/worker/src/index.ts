@@ -1,5 +1,6 @@
 import { runSmokeAudit } from "@modeltruth/audit-engine";
-import { createJobRepository, ensureDatabaseReady } from "@modeltruth/db";
+import { decryptSecret } from "@modeltruth/crypto";
+import { createJobRepository, createProviderNodeRepository, ensureDatabaseReady, saveAuditRun } from "@modeltruth/db";
 
 const intervalMs = Number(process.env.WORKER_POLL_INTERVAL_MS ?? 5000);
 const workerId = `audit-worker-${process.pid}`;
@@ -10,11 +11,28 @@ export async function runWorkerTick() {
     const job = await repo.claimNext({ workerId, types: ["heartbeat", "deepAudit"] });
     if (!job) return;
     try {
-      await runSmokeAudit({
-        baseUrl: "https://api.example.com/v1",
-        apiKey: "worker-placeholder-key",
-        model: "gpt-5.1",
-        suiteId: job.type === "deepAudit" ? "reasoning-lite@1.0.0" : "smoke@1.0.0"
+      const payload = await parseAuditJobPayload(job.payloadJson);
+      const result = await runSmokeAudit({
+        baseUrl: payload.baseUrl,
+        apiKey: payload.apiKey,
+        model: payload.model,
+        suiteId: payload.suite
+      });
+      const parsedSuite = parseSuiteId(payload.suite);
+      await saveAuditRun({
+        id: result.runId,
+        workspaceId: payload.workspaceId,
+        nodeId: payload.nodeId,
+        suiteId: parsedSuite.suiteId,
+        suiteVersion: parsedSuite.suiteVersion,
+        runType: job.type,
+        targetModelId: payload.model,
+        status: result.overallStatus,
+        confidence: result.confidence,
+        metrics: result.metrics,
+        assertions: result.assertions,
+        evidenceSummary: result.evidenceSummary,
+        finishedAt: new Date().toISOString()
       });
       await repo.complete(job.id);
       console.log(`[worker] completed ${job.type} job ${job.id}`);
@@ -24,6 +42,53 @@ export async function runWorkerTick() {
   } finally {
     await repo.close();
   }
+}
+
+async function parseAuditJobPayload(payloadJson: string) {
+  const payload = JSON.parse(payloadJson) as {
+    workspaceId?: string;
+    nodeId?: string;
+    baseUrl?: string;
+    apiKey?: string;
+    model?: string;
+    modelId?: string;
+    suiteId?: string;
+  };
+
+  if (payload.nodeId) {
+    const nodes = await createProviderNodeRepository();
+    try {
+      const node = await nodes.getForAudit(payload.nodeId);
+      if (!node?.encryptedApiKey) throw new Error(`provider node ${payload.nodeId} is missing encrypted key material`);
+      return {
+        workspaceId: node.workspaceId,
+        nodeId: node.id,
+        baseUrl: node.baseUrl,
+        apiKey: decryptSecret(node.encryptedApiKey),
+        model: node.modelId,
+        suite: payload.suiteId ?? "smoke@1.0.0"
+      };
+    } finally {
+      await nodes.close();
+    }
+  }
+
+  if (!payload.baseUrl || !payload.apiKey || !(payload.model ?? payload.modelId)) {
+    throw new Error("audit job payload requires nodeId or baseUrl/apiKey/model");
+  }
+  return {
+    workspaceId: payload.workspaceId,
+    nodeId: payload.nodeId,
+    baseUrl: payload.baseUrl,
+    apiKey: payload.apiKey,
+    model: payload.model ?? payload.modelId!,
+    suite: payload.suiteId ?? "smoke@1.0.0"
+  };
+}
+
+function parseSuiteId(value: string) {
+  const [suiteId, suiteVersion = "1.0.0"] = value.split("@");
+  return { suiteId: suiteId || "smoke", suiteVersion };
 }
 
 async function main() {

@@ -1,18 +1,35 @@
-import { ensureDatabaseReady } from "@modeltruth/db";
-import { createJobRepository } from "@modeltruth/db";
+import { createJobRepository, createProviderNodeRepository, ensureDatabaseReady } from "@modeltruth/db";
 
 const intervalMs = Number(process.env.SCHEDULER_INTERVAL_MS ?? 60_000);
 
 export async function runSchedulerTick() {
-  const repo = await createJobRepository();
+  const jobs = await createJobRepository();
+  const nodes = await createProviderNodeRepository();
   try {
-    const job = await repo.enqueue({
-      type: "heartbeat",
-      payload: { source: "scheduler", scheduledAt: new Date().toISOString() }
-    });
-    console.log(`[scheduler] enqueued ${job.type} job ${job.id}`);
+    const now = new Date();
+    const dueNodes = await nodes.listDueForSchedule(now);
+    for (const node of dueNodes) {
+      if (!node.nextHeartbeatAt || new Date(node.nextHeartbeatAt) <= now) {
+        const job = await jobs.enqueue({
+          type: "heartbeat",
+          payload: { source: "scheduler", nodeId: node.id, scheduledAt: now.toISOString() }
+        });
+        await nodes.markScheduled(node.id, "heartbeat", new Date(now.getTime() + node.heartbeatIntervalSeconds * 1000));
+        console.log(`[scheduler] enqueued ${job.type} job ${job.id} for node ${node.id}`);
+      }
+      if (!node.nextDeepAuditAt || new Date(node.nextDeepAuditAt) <= now) {
+        const job = await jobs.enqueue({
+          type: "deepAudit",
+          payload: { source: "scheduler", nodeId: node.id, suiteId: "smoke@1.0.0", scheduledAt: now.toISOString() }
+        });
+        await nodes.markScheduled(node.id, "deepAudit", new Date(now.getTime() + node.deepAuditIntervalSeconds * 1000));
+        console.log(`[scheduler] enqueued ${job.type} job ${job.id} for node ${node.id}`);
+      }
+    }
+    if (dueNodes.length === 0) console.log("[scheduler] no provider nodes due");
   } finally {
-    await repo.close();
+    await nodes.close();
+    await jobs.close();
   }
 }
 
