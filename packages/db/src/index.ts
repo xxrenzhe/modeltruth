@@ -289,8 +289,8 @@ export type { ClaimJobInput, EnqueueJobInput, JobRecord, JobRepository, JobStatu
 export { createJobRepository, SqliteJobRepository } from "./jobs";
 export type { ProviderNodeRecord, ProviderNodeRepository, ProviderNodeSecretRecord } from "./provider-nodes";
 export { createProviderNodeRepository } from "./provider-nodes";
-export type { EvidencePackage, SaveAuditRunInput } from "./audit-runs";
-export { getEvidencePackage, saveAuditRun } from "./audit-runs";
+export type { AuditRunListItem, EvidencePackage, PublicAuditSummary, SaveAuditRunInput } from "./audit-runs";
+export { getEvidencePackage, getPublicAuditSummary, listAuditRuns, saveAuditRun } from "./audit-runs";
 export type { AuthRepository, AuthSession, AuthUser, AuthWorkspace, MagicLink } from "./auth";
 export { createAuthRepository } from "./auth";
 export type { BillingRepository, UpdateWorkspaceBillingInput, WorkspaceBilling } from "./billing";

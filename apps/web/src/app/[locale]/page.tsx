@@ -1,4 +1,5 @@
 import { getDictionary, type Locale } from "@modeltruth/i18n";
+import { getPublicAuditSummary } from "@modeltruth/db";
 
 export default async function HomePage({
   params
@@ -7,6 +8,7 @@ export default async function HomePage({
 }) {
   const { locale } = await params;
   const dictionary = getDictionary(locale);
+  const summary = await getPublicAuditSummary();
 
   return (
     <>
@@ -38,16 +40,16 @@ export default async function HomePage({
       </section>
       <section className="metricGrid" aria-label={dictionary.home.metricsLabel}>
         <div className="metric">
-          <strong>24/7</strong>
-          {dictionary.home.metricMonitoring}
+          <strong>{summary.totalRuns}</strong>
+          audit runs
         </div>
         <div className="metric">
-          <strong>0%</strong>
-          {dictionary.home.metricCommission}
+          <strong>{Math.round(summary.passRate * 100)}%</strong>
+          pass rate
         </div>
         <div className="metric">
-          <strong>JSON</strong>
-          {dictionary.home.metricEvidence}
+          <strong>{summary.riskFlags.length}</strong>
+          risk flags
         </div>
       </section>
     </>

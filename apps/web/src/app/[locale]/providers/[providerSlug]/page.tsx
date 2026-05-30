@@ -1,4 +1,5 @@
 import { getDictionary, type Locale } from "@modeltruth/i18n";
+import { getPublicAuditSummary } from "@modeltruth/db";
 
 export default async function ProviderPage({
   params
@@ -9,6 +10,7 @@ export default async function ProviderPage({
   const dictionary = getDictionary(locale);
   const provider =
     dictionary.providers.find((item) => item.slug === providerSlug) ?? dictionary.providers[0];
+  const summary = await getPublicAuditSummary();
 
   return (
     <section className="hero">
@@ -26,12 +28,16 @@ export default async function ProviderPage({
           <span className={`pill ${provider.status}`}>{provider.status}</span>
         </div>
         <div className="statusRow">
-          <span>24h uptime</span>
-          <strong>99.95%</strong>
+          <span>Audit pass rate</span>
+          <strong>{Math.round(summary.passRate * 100)}%</strong>
         </div>
         <div className="statusRow">
           <span>P95 TTFT</span>
-          <strong>820ms</strong>
+          <strong>{summary.p95TtftMs ?? "n/a"}ms</strong>
+        </div>
+        <div className="statusRow">
+          <span>Risk flags</span>
+          <strong>{summary.riskFlags.length}</strong>
         </div>
       </div>
     </section>

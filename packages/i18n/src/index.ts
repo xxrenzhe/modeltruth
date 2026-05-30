@@ -18,6 +18,7 @@ const dictionaries = {
       methodology: "Methodology",
       pricing: "Pricing",
       workspace: "Workspace",
+      evidence: "Evidence",
       login: "Log in"
     },
     home: {
@@ -66,6 +67,14 @@ const dictionaries = {
       alertChannels: "Alert channels",
       noAlerts: "No alert channels yet."
     },
+    evidence: {
+      eyebrow: "Evidence Center",
+      title: "Export technical evidence without leaking secrets.",
+      lede: "Review audit runs, risk flags and redacted evidence packages for provider disputes.",
+      empty: "No audit evidence yet.",
+      download: "Download JSON",
+      riskFlags: "Risk Flags"
+    },
     providers: [
       { slug: "openai", name: "OpenAI", status: "pass" },
       { slug: "anthropic", name: "Anthropic", status: "pass" },
@@ -83,6 +92,7 @@ const dictionaries = {
       methodology: "方法论",
       pricing: "价格",
       workspace: "Workspace",
+      evidence: "证据中心",
       login: "登录"
     },
     home: {
@@ -130,6 +140,14 @@ const dictionaries = {
       addAlert: "添加告警渠道",
       alertChannels: "告警渠道",
       noAlerts: "还没有告警渠道。"
+    },
+    evidence: {
+      eyebrow: "Evidence Center",
+      title: "导出不泄露密钥的技术证据。",
+      lede: "查看审计运行、风险标记和脱敏证据包，用于供应商争议。",
+      empty: "暂无审计证据。",
+      download: "下载 JSON",
+      riskFlags: "风险标记"
     },
     providers: [
       { slug: "openai", name: "OpenAI", status: "pass" },
