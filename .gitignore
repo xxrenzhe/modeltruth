@@ -1,11 +1,67 @@
-
-# Beads / Dolt files (added by bd init)
-.dolt/
-*.db
-.beads-credential-key
-
 # Project-private documentation and sensitive local assets
 docs/
 oldcode/
 secrets/
 claudedocs/
+
+# Environment files and credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Beads / Dolt local runtime files
+.dolt/
+.beads-credential-key
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+
+# Dependencies
+node_modules/
+.pnpm-store/
+.yarn/
+vendor/
+
+# Build and generated outputs
+.next/
+.nuxt/
+.svelte-kit/
+out/
+build/
+dist/
+coverage/
+.turbo/
+.vercel/
+
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Logs and runtime files
+logs/
+*.log
+*.pid
+*.seed
+*.local
+
+# OS, editor, and local tool noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.cursor/
+.claude/
+.kiro/
