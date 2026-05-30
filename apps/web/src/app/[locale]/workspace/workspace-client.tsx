@@ -13,6 +13,11 @@ interface WorkspaceLabels {
   empty: string;
   loginRequired: string;
   refresh: string;
+  alertType: string;
+  alertTarget: string;
+  addAlert: string;
+  alertChannels: string;
+  noAlerts: string;
 }
 
 interface ProviderNode {
@@ -29,8 +34,16 @@ interface ProviderNode {
   createdAt: string;
 }
 
+interface AlertChannel {
+  id: string;
+  type: "webhook" | "slack" | "discord";
+  enabled: boolean;
+  targetSuffix?: string;
+}
+
 export function WorkspaceClient({ labels }: { labels: WorkspaceLabels }) {
   const [nodes, setNodes] = useState<ProviderNode[]>([]);
+  const [channels, setChannels] = useState<AlertChannel[]>([]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [pending, setPending] = useState(false);
@@ -47,8 +60,15 @@ export function WorkspaceClient({ labels }: { labels: WorkspaceLabels }) {
     setNodes(payload.nodes ?? []);
   }
 
+  async function loadChannels() {
+    const response = await fetch("/api/workspace/alert-channels");
+    const payload = await response.json();
+    if (response.ok) setChannels(payload.channels ?? []);
+  }
+
   useEffect(() => {
     void loadNodes();
+    void loadChannels();
   }, []);
 
   async function createNode(formData: FormData) {
@@ -79,41 +99,96 @@ export function WorkspaceClient({ labels }: { labels: WorkspaceLabels }) {
     }
   }
 
+  async function createAlertChannel(formData: FormData) {
+    setPending(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/workspace/alert-channels", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: formData.get("type"),
+          target: formData.get("target")
+        })
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Unable to create alert channel");
+      setNotice(`Created ${payload.channel.type} alert channel`);
+      await loadChannels();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to create alert channel");
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
     <section className="workspaceGrid">
-      <form className="card formGrid" action={createNode}>
-        <label>
-          {labels.name}
-          <input name="name" placeholder="Primary production gateway" required />
-        </label>
-        <label>
-          {labels.baseUrl}
-          <input name="baseUrl" placeholder="https://api.example.com/v1" required />
-        </label>
-        <label>
-          {labels.modelId}
-          <input name="modelId" placeholder="gpt-5.1" required />
-        </label>
-        <label>
-          {labels.apiKey}
-          <input name="apiKey" placeholder="sk-..." required type="password" />
-        </label>
-        <div className="twoColumn">
+      <div className="formGrid">
+        <form className="card formGrid" action={createNode}>
           <label>
-            {labels.heartbeat}
-            <input defaultValue="300" min="60" name="heartbeatIntervalSeconds" type="number" />
+            {labels.name}
+            <input name="name" placeholder="Primary production gateway" required />
           </label>
           <label>
-            {labels.deepAudit}
-            <input defaultValue="43200" min="3600" name="deepAuditIntervalSeconds" type="number" />
+            {labels.baseUrl}
+            <input name="baseUrl" placeholder="https://api.example.com/v1" required />
           </label>
-        </div>
-        <button className="button" disabled={pending} type="submit">
-          {pending ? "..." : labels.create}
-        </button>
+          <label>
+            {labels.modelId}
+            <input name="modelId" placeholder="gpt-5.1" required />
+          </label>
+          <label>
+            {labels.apiKey}
+            <input name="apiKey" placeholder="sk-..." required type="password" />
+          </label>
+          <div className="twoColumn">
+            <label>
+              {labels.heartbeat}
+              <input defaultValue="300" min="60" name="heartbeatIntervalSeconds" type="number" />
+            </label>
+            <label>
+              {labels.deepAudit}
+              <input defaultValue="43200" min="3600" name="deepAuditIntervalSeconds" type="number" />
+            </label>
+          </div>
+          <button className="button" disabled={pending} type="submit">
+            {pending ? "..." : labels.create}
+          </button>
+        </form>
+
+        <form className="card formGrid" action={createAlertChannel}>
+          <div className="eyebrow">{labels.alertChannels}</div>
+          <label>
+            {labels.alertType}
+            <select name="type" defaultValue="webhook">
+              <option value="webhook">Webhook</option>
+              <option value="slack">Slack</option>
+              <option value="discord">Discord</option>
+            </select>
+          </label>
+          <label>
+            {labels.alertTarget}
+            <input name="target" placeholder="https://hooks.example.com/..." required />
+          </label>
+          <button className="button" disabled={pending} type="submit">
+            {pending ? "..." : labels.addAlert}
+          </button>
+          {channels.length === 0 ? <p className="lede">{labels.noAlerts}</p> : null}
+          <div className="statusList">
+            {channels.map((channel) => (
+              <div className="statusRow" key={channel.id}>
+                <span>{channel.type}</span>
+                <span className="pill pass">{channel.enabled ? "enabled" : "off"}</span>
+              </div>
+            ))}
+          </div>
+        </form>
+
         {notice ? <p className="notice">{notice}</p> : null}
         {error ? <p className="notice error">{error}</p> : null}
-      </form>
+      </div>
 
       <div className="card formGrid">
         <button className="button secondary" onClick={loadNodes} type="button">

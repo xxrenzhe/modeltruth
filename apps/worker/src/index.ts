@@ -34,6 +34,20 @@ export async function runWorkerTick() {
         evidenceSummary: result.evidenceSummary,
         finishedAt: new Date().toISOString()
       });
+      if (["fail", "error", "warning"].includes(result.overallStatus) && payload.workspaceId) {
+        await repo.enqueue({
+          type: "alert",
+          payload: {
+            workspaceId: payload.workspaceId,
+            nodeId: payload.nodeId,
+            runId: result.runId,
+            status: result.overallStatus,
+            confidence: result.confidence,
+            message: `ModelTruth audit ${result.overallStatus} for ${payload.model}`,
+            createdAt: new Date().toISOString()
+          }
+        });
+      }
       await repo.complete(job.id);
       console.log(`[worker] completed ${job.type} job ${job.id}`);
     } catch (error) {
@@ -100,7 +114,9 @@ async function main() {
   }, intervalMs);
 }
 
-main().catch((error) => {
-  console.error("[worker] fatal", error);
-  process.exit(1);
-});
+if (process.argv[1]?.endsWith("apps/worker/src/index.ts")) {
+  main().catch((error) => {
+    console.error("[worker] fatal", error);
+    process.exit(1);
+  });
+}

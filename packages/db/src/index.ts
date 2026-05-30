@@ -295,3 +295,11 @@ export type { AuthRepository, AuthSession, AuthUser, AuthWorkspace, MagicLink } 
 export { createAuthRepository } from "./auth";
 export type { BillingRepository, UpdateWorkspaceBillingInput, WorkspaceBilling } from "./billing";
 export { createBillingRepository } from "./billing";
+export type {
+  AlertChannelRecord,
+  AlertChannelRepository,
+  AlertChannelSecretRecord,
+  AlertChannelType,
+  CreateAlertChannelInput
+} from "./alert-channels";
+export { createAlertChannelRepository } from "./alert-channels";

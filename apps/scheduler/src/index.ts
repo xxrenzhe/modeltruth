@@ -42,7 +42,9 @@ async function main() {
   }, intervalMs);
 }
 
-main().catch((error) => {
-  console.error("[scheduler] fatal", error);
-  process.exit(1);
-});
+if (process.argv[1]?.endsWith("apps/scheduler/src/index.ts")) {
+  main().catch((error) => {
+    console.error("[scheduler] fatal", error);
+    process.exit(1);
+  });
+}

@@ -59,7 +59,12 @@ const dictionaries = {
       create: "Create monitored node",
       empty: "No private nodes yet.",
       loginRequired: "Log in to manage workspace nodes.",
-      refresh: "Refresh nodes"
+      refresh: "Refresh nodes",
+      alertType: "Alert type",
+      alertTarget: "Alert webhook URL",
+      addAlert: "Add alert channel",
+      alertChannels: "Alert channels",
+      noAlerts: "No alert channels yet."
     },
     providers: [
       { slug: "openai", name: "OpenAI", status: "pass" },
@@ -119,7 +124,12 @@ const dictionaries = {
       create: "创建监控节点",
       empty: "还没有私有节点。",
       loginRequired: "登录后管理 Workspace 节点。",
-      refresh: "刷新节点"
+      refresh: "刷新节点",
+      alertType: "告警类型",
+      alertTarget: "告警 Webhook URL",
+      addAlert: "添加告警渠道",
+      alertChannels: "告警渠道",
+      noAlerts: "还没有告警渠道。"
     },
     providers: [
       { slug: "openai", name: "OpenAI", status: "pass" },
