@@ -48,7 +48,6 @@ class SqliteProviderNodeRepository implements ProviderNodeRepository {
 
   async create(input: CreateProviderNodeInput): Promise<ProviderNodeRecord> {
     const now = new Date().toISOString();
-    await this.ensureWorkspace(input.workspaceId, now);
     const id = crypto.randomUUID();
     this.db
       .prepare(
@@ -84,16 +83,6 @@ class SqliteProviderNodeRepository implements ProviderNodeRepository {
   async close(): Promise<void> {
     this.db.close();
   }
-
-  private async ensureWorkspace(workspaceId: string, now: string) {
-    const userId = "system_user";
-    this.db
-      .prepare("insert or ignore into users (id, email, name, created_at, updated_at) values (?, ?, ?, ?, ?)")
-      .run(userId, "system@modeltruth.local", "System User", now, now);
-    this.db
-      .prepare("insert or ignore into workspaces (id, owner_id, name, tier, created_at, updated_at) values (?, ?, ?, ?, ?, ?)")
-      .run(workspaceId, userId, "Default Workspace", "free", now, now);
-  }
 }
 
 class PostgresProviderNodeRepository implements ProviderNodeRepository {
@@ -106,28 +95,16 @@ class PostgresProviderNodeRepository implements ProviderNodeRepository {
   async create(input: CreateProviderNodeInput): Promise<ProviderNodeRecord> {
     const now = new Date().toISOString();
     const id = crypto.randomUUID();
-    await this.sql.begin(async (tx) => {
-      await tx`
-        insert into users (id, email, name, created_at, updated_at)
-        values ('system_user', 'system@modeltruth.local', 'System User', ${now}, ${now})
-        on conflict (id) do nothing
-      `;
-      await tx`
-        insert into workspaces (id, owner_id, name, tier, created_at, updated_at)
-        values (${input.workspaceId}, 'system_user', 'Default Workspace', 'free', ${now}, ${now})
-        on conflict (id) do nothing
-      `;
-      await tx`
-        insert into provider_nodes (
-          id, workspace_id, name, base_url, base_url_host_hash, model_id, encrypted_api_key, api_key_suffix,
-          status, heartbeat_interval_seconds, deep_audit_interval_seconds, created_at, updated_at
-        ) values (
-          ${id}, ${input.workspaceId}, ${input.name}, ${input.baseUrl}, ${input.baseUrlHostHash}, ${input.modelId},
-          ${input.encryptedApiKey}, ${input.apiKeySuffix}, 'active', ${input.heartbeatIntervalSeconds ?? 300},
-          ${input.deepAuditIntervalSeconds ?? 43200}, ${now}, ${now}
-        )
-      `;
-    });
+    await this.sql`
+      insert into provider_nodes (
+        id, workspace_id, name, base_url, base_url_host_hash, model_id, encrypted_api_key, api_key_suffix,
+        status, heartbeat_interval_seconds, deep_audit_interval_seconds, created_at, updated_at
+      ) values (
+        ${id}, ${input.workspaceId}, ${input.name}, ${input.baseUrl}, ${input.baseUrlHostHash}, ${input.modelId},
+        ${input.encryptedApiKey}, ${input.apiKeySuffix}, 'active', ${input.heartbeatIntervalSeconds ?? 300},
+        ${input.deepAuditIntervalSeconds ?? 43200}, ${now}, ${now}
+      )
+    `;
     return (await this.list(input.workspaceId)).find((node) => node.id === id)!;
   }
 

@@ -291,3 +291,5 @@ export type { ProviderNodeRecord, ProviderNodeRepository } from "./provider-node
 export { createProviderNodeRepository } from "./provider-nodes";
 export type { EvidencePackage } from "./audit-runs";
 export { getEvidencePackage } from "./audit-runs";
+export type { AuthRepository, AuthSession, AuthUser, AuthWorkspace, MagicLink } from "./auth";
+export { createAuthRepository } from "./auth";

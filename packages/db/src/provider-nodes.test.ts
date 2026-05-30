@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { encryptSecret, getSecretSuffix } from "@modeltruth/crypto";
 import { ensureSqliteReady } from "./index";
+import { createAuthRepository } from "./auth";
 import { createProviderNodeRepository } from "./provider-nodes";
 
 describe("ProviderNodeRepository", () => {
@@ -14,9 +15,14 @@ describe("ProviderNodeRepository", () => {
     process.env.DATABASE_PATH = path.join(dir, "modeltruth.sqlite");
     await ensureSqliteReady({ cwd, databasePath: process.env.DATABASE_PATH });
 
+    const authRepo = await createAuthRepository();
+    const link = await authRepo.createMagicLink("node-owner@example.com");
+    const sessionResult = await authRepo.consumeMagicLink(link.token);
+    await authRepo.close();
+
     const repo = await createProviderNodeRepository();
     const node = await repo.create({
-      workspaceId: "workspace_test",
+      workspaceId: sessionResult!.session.workspace.id,
       name: "Primary",
       baseUrl: "https://api.example.com/v1",
       baseUrlHostHash: "host_hash",
@@ -24,7 +30,7 @@ describe("ProviderNodeRepository", () => {
       encryptedApiKey: encryptSecret("sk-test-node-123456", "test-key"),
       apiKeySuffix: getSecretSuffix("sk-test-node-123456")
     });
-    const nodes = await repo.list("workspace_test");
+    const nodes = await repo.list(sessionResult!.session.workspace.id);
     await repo.close();
     if (previousPath === undefined) delete process.env.DATABASE_PATH;
     else process.env.DATABASE_PATH = previousPath;

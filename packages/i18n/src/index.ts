@@ -16,7 +16,8 @@ const dictionaries = {
       playground: "Playground",
       providers: "Providers",
       methodology: "Methodology",
-      pricing: "Pricing"
+      pricing: "Pricing",
+      login: "Log in"
     },
     home: {
       eyebrow: "Trust, but verify every token",
@@ -36,6 +37,14 @@ const dictionaries = {
       lede: "Free Playground keys are used only for the current run and redacted from logs.",
       submit: "Run audit"
     },
+    login: {
+      eyebrow: "Workspace Access",
+      title: "Log in with a magic link.",
+      lede: "ModelTruth uses email links for lightweight workspace sessions. In local development, the verification link is shown after submission.",
+      email: "Work email",
+      submit: "Send magic link",
+      success: "Magic link created. Open this verification URL to start your session."
+    },
     providers: [
       { slug: "openai", name: "OpenAI", status: "pass" },
       { slug: "anthropic", name: "Anthropic", status: "pass" },
@@ -51,7 +60,8 @@ const dictionaries = {
       playground: "测试台",
       providers: "供应商",
       methodology: "方法论",
-      pricing: "价格"
+      pricing: "价格",
+      login: "登录"
     },
     home: {
       eyebrow: "Trust, but verify every token",
@@ -70,6 +80,14 @@ const dictionaries = {
       title: "不保存密钥，快速审计一个 endpoint。",
       lede: "Free Playground 的 API Key 只用于当前运行，并从日志中脱敏。",
       submit: "运行审计"
+    },
+    login: {
+      eyebrow: "Workspace 访问",
+      title: "使用 Magic Link 登录。",
+      lede: "ModelTruth 使用邮件链接建立轻量 Workspace 会话。本地开发环境会在提交后直接显示验证链接。",
+      email: "工作邮箱",
+      submit: "发送登录链接",
+      success: "登录链接已创建。打开下面的验证地址即可开始会话。"
     },
     providers: [
       { slug: "openai", name: "OpenAI", status: "pass" },

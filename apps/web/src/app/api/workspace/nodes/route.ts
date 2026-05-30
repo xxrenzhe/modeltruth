@@ -2,27 +2,33 @@ import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { createProviderNodeRepository } from "@modeltruth/db";
 import { encryptSecret, getSecretSuffix, redactSecrets } from "@modeltruth/crypto";
+import { getCurrentSession } from "../../../../lib/auth";
 
-export async function GET(request: Request) {
-  const workspaceId = new URL(request.url).searchParams.get("workspaceId") ?? "default_workspace";
+export async function GET() {
+  const session = await getCurrentSession();
+  if (!session) return NextResponse.json({ error: "authentication required" }, { status: 401 });
+
   const repo = await createProviderNodeRepository();
   try {
-    return NextResponse.json({ nodes: await repo.list(workspaceId) });
+    return NextResponse.json({ nodes: await repo.list(session.workspace.id) });
   } finally {
     await repo.close();
   }
 }
 
 export async function POST(request: Request) {
-  const body = await request.json();
-  const baseUrl = validateBaseUrl(String(body.baseUrl ?? ""));
-  const apiKey = String(body.apiKey ?? "");
-  if (!apiKey) return NextResponse.json({ error: "apiKey is required" }, { status: 400 });
+  const session = await getCurrentSession();
+  if (!session) return NextResponse.json({ error: "authentication required" }, { status: 401 });
 
   const repo = await createProviderNodeRepository();
   try {
+    const body = await request.json();
+    const baseUrl = validateBaseUrl(String(body.baseUrl ?? ""));
+    const apiKey = String(body.apiKey ?? "");
+    if (!apiKey) return NextResponse.json({ error: "apiKey is required" }, { status: 400 });
+
     const node = await repo.create({
-      workspaceId: String(body.workspaceId ?? "default_workspace"),
+      workspaceId: session.workspace.id,
       name: String(body.name ?? "Primary Gateway"),
       baseUrl: baseUrl.toString(),
       baseUrlHostHash: createHash("sha256").update(baseUrl.host).digest("hex"),
@@ -33,6 +39,8 @@ export async function POST(request: Request) {
       deepAuditIntervalSeconds: Number(body.deepAuditIntervalSeconds ?? 43200)
     });
     return NextResponse.json(redactSecrets({ node }), { status: 201 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "invalid request" }, { status: 400 });
   } finally {
     await repo.close();
   }
