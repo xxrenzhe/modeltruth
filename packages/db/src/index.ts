@@ -454,6 +454,8 @@ export type {
   ProviderSubscriptionStatus
 } from "./provider-subscriptions";
 export { createProviderSubscriptionRepository } from "./provider-subscriptions";
+export type { ContentPageRecord, ContentPageRepository, ContentPageType, UpsertContentPageInput } from "./content-pages";
+export { createContentPageRepository } from "./content-pages";
 export type { PlaygroundQuotaRepository, PlaygroundQuotaResult } from "./playground-quota";
 export { createPlaygroundQuotaRepository } from "./playground-quota";
 export type {

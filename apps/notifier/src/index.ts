@@ -8,14 +8,16 @@ const workerId = `notifier-${process.pid}`;
 export async function runNotifierTick() {
   const repo = await createJobRepository();
   try {
-    const job = await repo.claimNext({ workerId, types: ["alert"] });
+    const job = await repo.claimNext({ workerId, types: ["alert", "providerDigest"] });
     if (!job) return;
     try {
-      const payload = parseAlertPayload(job.payloadJson);
-      const delivered = await deliverAlert(payload);
+      const delivered =
+        job.type === "providerDigest"
+          ? await deliverProviderDigest(parseProviderDigestPayload(job.payloadJson))
+          : await deliverAlert(parseAlertPayload(job.payloadJson));
       writeJsonLog({
         service: "notifier",
-        event: "alert.delivered",
+        event: job.type === "providerDigest" ? "provider_digest.delivered" : "alert.delivered",
         data: { jobId: job.id, deliveredChannels: delivered }
       });
       await repo.complete(job.id);
@@ -25,6 +27,20 @@ export async function runNotifierTick() {
   } finally {
     await repo.close();
   }
+}
+
+export interface ProviderDigestPayload {
+  providerSlug: string;
+  providerName?: string;
+  notificationType: "risk_trend" | "weekly_digest";
+  subscriberEmails: string[];
+  status?: string;
+  uptime?: number;
+  p95TtftMs?: number;
+  auditPassRate?: number;
+  riskFlagCount?: number;
+  evidenceScore?: number;
+  scheduledAt?: string;
 }
 
 export interface AlertPayload {
@@ -54,6 +70,21 @@ export async function deliverAlert(payload: AlertPayload, fetchImpl = fetch): Pr
   }
 }
 
+export async function deliverProviderDigest(payload: ProviderDigestPayload, fetchImpl = fetch): Promise<number> {
+  const destination = emailWebhookUrl();
+  let delivered = 0;
+  for (const email of payload.subscriberEmails) {
+    const response = await fetchImpl(destination, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(formatProviderDigestBody(payload, email))
+    });
+    if (!response.ok) throw new Error(`provider digest delivery failed with ${response.status}`);
+    delivered += 1;
+  }
+  return delivered;
+}
+
 function parseAlertPayload(payloadJson: string): AlertPayload {
   const payload = JSON.parse(payloadJson) as Partial<AlertPayload>;
   if (!payload.workspaceId || !payload.status || !payload.message) {
@@ -68,6 +99,29 @@ function parseAlertPayload(payloadJson: string): AlertPayload {
     message: payload.message,
     rule: payload.rule,
     createdAt: payload.createdAt
+  };
+}
+
+function parseProviderDigestPayload(payloadJson: string): ProviderDigestPayload {
+  const payload = JSON.parse(payloadJson) as Partial<ProviderDigestPayload>;
+  if (!payload.providerSlug || !payload.notificationType || !Array.isArray(payload.subscriberEmails)) {
+    throw new Error("provider digest payload requires providerSlug, notificationType and subscriberEmails");
+  }
+  if (payload.notificationType !== "risk_trend" && payload.notificationType !== "weekly_digest") {
+    throw new Error("provider digest notificationType is invalid");
+  }
+  return {
+    providerSlug: payload.providerSlug,
+    providerName: payload.providerName,
+    notificationType: payload.notificationType,
+    subscriberEmails: payload.subscriberEmails.filter((email): email is string => typeof email === "string" && email.includes("@")),
+    status: payload.status,
+    uptime: payload.uptime,
+    p95TtftMs: payload.p95TtftMs,
+    auditPassRate: payload.auditPassRate,
+    riskFlagCount: payload.riskFlagCount,
+    evidenceScore: payload.evidenceScore,
+    scheduledAt: payload.scheduledAt
   };
 }
 
@@ -89,6 +143,33 @@ function formatAlertBody(type: string, payload: AlertPayload, target?: string) {
   if (type === "email") return { to: target, subject: "ModelTruth Alert", text, modeltruth: payload };
   if (type === "telegram") return { chat_id: target, text, disable_web_page_preview: true };
   return { text, alert: payload };
+}
+
+function formatProviderDigestBody(payload: ProviderDigestPayload, email: string) {
+  const providerName = payload.providerName ?? payload.providerSlug;
+  const subject =
+    payload.notificationType === "risk_trend"
+      ? `ModelTruth Risk Trend: ${providerName}`
+      : `ModelTruth Weekly Provider Digest: ${providerName}`;
+  const text = [
+    `${providerName} technical audit summary`,
+    `Status: ${payload.status ?? "unknown"}`,
+    `Uptime: ${formatPercent(payload.uptime)}`,
+    `P95 TTFT: ${formatMs(payload.p95TtftMs)}`,
+    `Audit pass rate: ${formatPercent(payload.auditPassRate)}`,
+    `Risk flags: ${payload.riskFlagCount ?? 0}`,
+    `Evidence score: ${payload.evidenceScore ?? 0}`,
+    "Results are automated technical signals, not legal conclusions."
+  ].join("\n");
+  return { to: email, subject, text, modeltruth: { ...payload, subscriberEmails: undefined } };
+}
+
+function formatPercent(value: number | undefined) {
+  return typeof value === "number" ? `${(value * 100).toFixed(1)}%` : "n/a";
+}
+
+function formatMs(value: number | undefined) {
+  return typeof value === "number" ? `${Math.round(value)}ms` : "n/a";
 }
 
 function parseTelegramTarget(target: string) {

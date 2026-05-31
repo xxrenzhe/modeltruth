@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { encryptSecret } from "@modeltruth/crypto";
 import { createAlertChannelRepository, ensureSqliteReady } from "@modeltruth/db";
 import { createAuthRepository } from "@modeltruth/db";
-import { deliverAlert } from "./index";
+import { deliverAlert, deliverProviderDigest } from "./index";
 
 describe("deliverAlert", () => {
   it("posts redacted alert payloads to enabled webhook channels", async () => {
@@ -193,5 +193,40 @@ describe("deliverAlert", () => {
     expect(calls[0].url).toBe("https://api.telegram.org/bot123456789:telegramSecretTokenValue/sendMessage");
     expect(calls[0].body).toContain('"chat_id":"-1001234567890"');
     expect(calls[0].body).toContain("run_telegram_alert");
+  });
+
+  it("delivers provider digest emails through the configured email webhook", async () => {
+    const previousWebhook = process.env.EMAIL_ALERT_WEBHOOK_URL;
+    process.env.EMAIL_ALERT_WEBHOOK_URL = "https://email.example.com/send";
+    const calls: Array<{ url: string; body?: string }> = [];
+
+    const delivered = await deliverProviderDigest(
+      {
+        providerSlug: "openrouter",
+        providerName: "OpenRouter",
+        notificationType: "weekly_digest",
+        subscriberEmails: ["weekly@example.com", "ops@example.com"],
+        status: "warning",
+        uptime: 0.98,
+        p95TtftMs: 1400,
+        auditPassRate: 0.75,
+        riskFlagCount: 2,
+        evidenceScore: 81
+      },
+      async (url, init) => {
+        calls.push({ url: String(url), body: String(init?.body) });
+        return new Response("ok", { status: 200 });
+      }
+    );
+
+    if (previousWebhook === undefined) delete process.env.EMAIL_ALERT_WEBHOOK_URL;
+    else process.env.EMAIL_ALERT_WEBHOOK_URL = previousWebhook;
+
+    expect(delivered).toBe(2);
+    expect(calls.map((call) => call.url)).toEqual(["https://email.example.com/send", "https://email.example.com/send"]);
+    expect(calls[0].body).toContain("weekly@example.com");
+    expect(calls[0].body).toContain("ModelTruth Weekly Provider Digest: OpenRouter");
+    expect(calls[0].body).toContain("not legal conclusions");
+    expect(calls[0].body).not.toContain("ops@example.com");
   });
 });

@@ -3,6 +3,8 @@ import {
   createJobRepository,
   createModelRegistryRepository,
   createProviderNodeRepository,
+  createProviderSubscriptionRepository,
+  getPublicAuditSummary,
   ensureDatabaseReady
 } from "@modeltruth/db";
 import { installGracefulShutdown, writeJsonLog } from "@modeltruth/shared";
@@ -51,10 +53,56 @@ export async function runSchedulerTick() {
     }
     if (dueNodes.length === 0) writeJsonLog({ service: "scheduler", event: "nodes.none_due" });
     await enqueueDueCalibrations(jobs, now);
+    await enqueueProviderDigests(jobs, now);
   } finally {
     await nodes.close();
     await jobs.close();
   }
+}
+
+async function enqueueProviderDigests(jobs: Awaited<ReturnType<typeof createJobRepository>>, now: Date) {
+  const summary = await getPublicAuditSummary();
+  const subscriptions = await createProviderSubscriptionRepository();
+  try {
+    for (const provider of summary.providers) {
+      for (const notificationType of ["weekly_digest", "risk_trend"] as const) {
+        if (notificationType === "risk_trend" && provider.riskFlags.length === 0) continue;
+        const subscribers = await subscriptions.listByProviderAndType(provider.providerSlug, notificationType);
+        if (subscribers.length === 0) continue;
+        const fingerprint = `providerDigest:${provider.providerSlug}:${notificationType}:${digestWindow(now, notificationType)}`;
+        if (await jobs.hasActiveFingerprint("providerDigest", fingerprint)) continue;
+        const job = await jobs.enqueue({
+          type: "providerDigest",
+          payload: {
+            fingerprint,
+            providerSlug: provider.providerSlug,
+            providerName: provider.providerSlug,
+            notificationType,
+            subscriberEmails: subscribers.map((subscriber) => subscriber.email),
+            status: provider.riskFlags.length > 0 ? "warning" : "pass",
+            uptime: provider.windows["24h"].uptime,
+            p95TtftMs: provider.windows["24h"].p95TtftMs,
+            auditPassRate: provider.windows["24h"].passRate,
+            riskFlagCount: provider.riskFlags.length,
+            evidenceScore: provider.evidenceScore,
+            scheduledAt: now.toISOString()
+          }
+        });
+        writeJsonLog({
+          service: "scheduler",
+          event: "job.enqueued",
+          data: { jobId: job.id, jobType: job.type, providerSlug: provider.providerSlug, notificationType }
+        });
+      }
+    }
+  } finally {
+    await subscriptions.close();
+  }
+}
+
+function digestWindow(now: Date, notificationType: "weekly_digest" | "risk_trend") {
+  const days = Math.floor(now.getTime() / (24 * 60 * 60 * 1000));
+  return notificationType === "weekly_digest" ? Math.floor(days / 7) : days;
 }
 
 function scheduleFingerprint(nodeId: string, type: "heartbeat" | "deepAudit", now: Date, intervalSeconds: number) {

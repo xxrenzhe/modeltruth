@@ -21,6 +21,7 @@ describe("ProviderSubscriptionRepository", () => {
       notificationType: "weekly_digest"
     });
     const subscriptions = await repo.listByProvider("openrouter");
+    const digestSubscriptions = await repo.listByProviderAndType("openrouter", "weekly_digest");
     const subscriptionsByEmail = await repo.listByEmail("dev@example.com");
     await repo.close();
     if (previousPath === undefined) delete process.env.DATABASE_PATH;
@@ -31,6 +32,8 @@ describe("ProviderSubscriptionRepository", () => {
     expect(second.id).toBe(first.id);
     expect(digest.notificationType).toBe("weekly_digest");
     expect(subscriptions).toHaveLength(2);
+    expect(digestSubscriptions).toHaveLength(1);
+    expect(digestSubscriptions[0].notificationType).toBe("weekly_digest");
     expect(subscriptionsByEmail.map((item) => item.providerSlug)).toEqual(["openrouter", "openrouter"]);
   });
 });

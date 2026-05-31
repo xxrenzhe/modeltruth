@@ -1,7 +1,14 @@
 import postgres from "postgres";
 import { getAppConfig } from "@modeltruth/config";
 
-export type JobType = "heartbeat" | "deepAudit" | "alert" | "calibration" | "disputeReview" | "prioritySupport";
+export type JobType =
+  | "heartbeat"
+  | "deepAudit"
+  | "alert"
+  | "calibration"
+  | "disputeReview"
+  | "prioritySupport"
+  | "providerDigest";
 export type JobStatus = "queued" | "running" | "completed" | "failed";
 
 export interface JobRecord {

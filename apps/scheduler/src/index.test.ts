@@ -7,8 +7,10 @@ import {
   createJobRepository,
   createModelRegistryRepository,
   createProviderNodeRepository,
+  createProviderSubscriptionRepository,
   ensureSqliteReady
 } from "@modeltruth/db";
+import { saveAuditRun } from "@modeltruth/db";
 import { runSchedulerTick } from "./index";
 
 describe("runSchedulerTick calibration scheduling", () => {
@@ -97,6 +99,59 @@ describe("runSchedulerTick calibration scheduling", () => {
       const deepAudit = await jobs.claimNext({ workerId: "test-scheduler", types: ["deepAudit"] });
       expect(JSON.parse(heartbeat?.payloadJson ?? "{}").fingerprint).toMatch(/^heartbeat:/);
       expect(JSON.parse(deepAudit?.payloadJson ?? "{}").fingerprint).toMatch(/^deepAudit:/);
+    } finally {
+      await jobs.close();
+      harness.cleanup();
+    }
+  });
+
+  it("enqueues provider digest and risk trend jobs for opted-in subscribers", async () => {
+    const harness = await createHarness("modeltruth-scheduler-provider-digest-");
+    await saveAuditRun({
+      id: "run_provider_warning",
+      providerSlug: "openrouter",
+      suiteId: "smoke",
+      suiteVersion: "1.0.0",
+      runType: "heartbeat",
+      targetModelId: "router-model",
+      status: "warning",
+      confidence: 0.82,
+      metrics: { statusCode: 500, ttftMs: 1200 },
+      assertions: [{ id: "HTTP_STATUS_OK", status: "warning" }],
+      evidenceSummary: { requestBodyStored: false }
+    });
+    await saveAuditRun({
+      id: "run_provider_retest",
+      providerSlug: "openrouter",
+      suiteId: "smoke",
+      suiteVersion: "1.0.0",
+      runType: "heartbeat",
+      targetModelId: "router-model",
+      status: "warning",
+      confidence: 0.83,
+      metrics: { statusCode: 500, ttftMs: 1100 },
+      assertions: [{ id: "HTTP_STATUS_OK", status: "warning" }],
+      evidenceSummary: { requestBodyStored: false, retestOf: "run_provider_warning" }
+    });
+    const subscriptions = await createProviderSubscriptionRepository();
+    await subscriptions.create({ providerSlug: "openrouter", email: "weekly@example.com", notificationType: "weekly_digest" });
+    await subscriptions.create({ providerSlug: "openrouter", email: "risk@example.com", notificationType: "risk_trend" });
+    await subscriptions.close();
+
+    await runSchedulerTick();
+    await runSchedulerTick();
+
+    const jobs = await createJobRepository();
+    try {
+      const first = await jobs.claimNext({ workerId: "test-provider-digest", types: ["providerDigest"] });
+      const second = await jobs.claimNext({ workerId: "test-provider-digest", types: ["providerDigest"] });
+      const third = await jobs.claimNext({ workerId: "test-provider-digest", types: ["providerDigest"] });
+      const payloads = [first, second].map((job) => JSON.parse(job?.payloadJson ?? "{}"));
+      expect(payloads.map((payload) => payload.notificationType).sort()).toEqual(["risk_trend", "weekly_digest"]);
+      expect(payloads.flatMap((payload) => payload.subscriberEmails).sort()).toEqual(["risk@example.com", "weekly@example.com"]);
+      expect(payloads[0].providerSlug).toBe("openrouter");
+      expect(payloads[0].riskFlagCount).toBeGreaterThan(0);
+      expect(third).toBeUndefined();
     } finally {
       await jobs.close();
       harness.cleanup();

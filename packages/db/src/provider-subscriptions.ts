@@ -23,6 +23,7 @@ export interface CreateProviderSubscriptionInput {
 export interface ProviderSubscriptionRepository {
   create(input: CreateProviderSubscriptionInput): Promise<ProviderSubscriptionRecord>;
   listByProvider(providerSlug: string): Promise<ProviderSubscriptionRecord[]>;
+  listByProviderAndType(providerSlug: string, notificationType: ProviderNotificationType): Promise<ProviderSubscriptionRecord[]>;
   listByEmail(email: string): Promise<ProviderSubscriptionRecord[]>;
   close(): Promise<void>;
 }
@@ -57,6 +58,17 @@ class SqliteProviderSubscriptionRepository implements ProviderSubscriptionReposi
     const rows = this.db
       .prepare("select * from provider_subscriptions where provider_slug = ? and status = 'active' order by created_at desc")
       .all(providerSlug) as ProviderSubscriptionRow[];
+    return rows.map(mapRow);
+  }
+
+  async listByProviderAndType(providerSlug: string, notificationType: ProviderNotificationType): Promise<ProviderSubscriptionRecord[]> {
+    const rows = this.db
+      .prepare(
+        `select * from provider_subscriptions
+         where provider_slug = ? and notification_type = ? and status = 'active'
+         order by created_at desc`
+      )
+      .all(providerSlug, notificationType) as ProviderSubscriptionRow[];
     return rows.map(mapRow);
   }
 
@@ -97,6 +109,15 @@ class PostgresProviderSubscriptionRepository implements ProviderSubscriptionRepo
     const rows = await this.sql<ProviderSubscriptionRow[]>`
       select * from provider_subscriptions
       where provider_slug = ${providerSlug} and status = 'active'
+      order by created_at desc
+    `;
+    return rows.map(mapRow);
+  }
+
+  async listByProviderAndType(providerSlug: string, notificationType: ProviderNotificationType): Promise<ProviderSubscriptionRecord[]> {
+    const rows = await this.sql<ProviderSubscriptionRow[]>`
+      select * from provider_subscriptions
+      where provider_slug = ${providerSlug} and notification_type = ${notificationType} and status = 'active'
       order by created_at desc
     `;
     return rows.map(mapRow);
