@@ -87,6 +87,29 @@ export default async function HomePage({
           Dashboard data age {formatFreshness(summary.dataFreshnessSeconds)}
         </div>
       </section>
+      <section className="card" aria-labelledby="waitlist-title">
+        <div className="eyebrow">{dictionary.home.waitlistEyebrow}</div>
+        <h2 id="waitlist-title">{dictionary.home.waitlistTitle}</h2>
+        <p className="lede">{dictionary.home.waitlistLede}</p>
+        <form className="formGrid" action="/api/waitlist" method="post">
+          <input name="source" type="hidden" value={`homepage:${locale}`} />
+          <label>
+            {dictionary.home.waitlistEmail}
+            <input name="email" type="email" placeholder="founder@example.com" required />
+          </label>
+          <label>
+            {dictionary.home.waitlistRole}
+            <input name="role" placeholder="AI founder" />
+          </label>
+          <label>
+            {dictionary.home.waitlistCompany}
+            <input name="company" placeholder="Example AI" />
+          </label>
+          <button className="button primary" type="submit">
+            {dictionary.home.waitlistSubmit}
+          </button>
+        </form>
+      </section>
     </>
   );
 }

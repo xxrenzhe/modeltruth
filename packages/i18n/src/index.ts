@@ -31,7 +31,14 @@ const dictionaries = {
       metricsLabel: "ModelTruth product metrics",
       metricMonitoring: "continuous monitoring",
       metricCommission: "supplier commission",
-      metricEvidence: "evidence exports"
+      metricEvidence: "evidence exports",
+      waitlistEyebrow: "Launch waitlist",
+      waitlistTitle: "Get the beta transparency changelog.",
+      waitlistLede: "Join the pre-launch list for CLI releases, anonymous baseline reports and provider-risk updates.",
+      waitlistEmail: "Work email",
+      waitlistRole: "Role",
+      waitlistCompany: "Company",
+      waitlistSubmit: "Join waitlist"
     },
     playground: {
       eyebrow: "Stateless Playground",
@@ -107,7 +114,14 @@ const dictionaries = {
       metricsLabel: "ModelTruth 产品指标",
       metricMonitoring: "持续监控",
       metricCommission: "供应商返佣",
-      metricEvidence: "证据导出"
+      metricEvidence: "证据导出",
+      waitlistEyebrow: "预发布 Waitlist",
+      waitlistTitle: "接收 Beta 透明度更新。",
+      waitlistLede: "加入预发布名单，获取 CLI 发布、匿名基准报告和供应商风险趋势更新。",
+      waitlistEmail: "工作邮箱",
+      waitlistRole: "角色",
+      waitlistCompany: "公司",
+      waitlistSubmit: "加入 waitlist"
     },
     playground: {
       eyebrow: "无状态测试台",

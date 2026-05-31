@@ -342,6 +342,24 @@
         "postgres": "select table_name from information_schema.tables where table_schema='public' and table_name in ('risk_flags','risk_flag_events','evidence_packages');"
       },
       "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    },
+    {
+      "number": "019",
+      "name": "waitlist_signups",
+      "sqliteMigration": "019_waitlist_signups.sql",
+      "postgresMigration": "019_waitlist_signups.pg.sql",
+      "impactQueries": [
+        "Launch waitlist signup intake, deduplication by email and launch analytics by status/created_at."
+      ],
+      "rollback": {
+        "sqlite": "Append a forward migration disabling waitlist APIs and dropping waitlist_signups before launch if required.",
+        "postgres": "Append a forward migration disabling waitlist APIs and dropping waitlist_signups before launch if required."
+      },
+      "validationSql": {
+        "sqlite": "select name from sqlite_master where type='table' and name='waitlist_signups';",
+        "postgres": "select table_name from information_schema.tables where table_schema='public' and table_name='waitlist_signups';"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
     }
   ]
 }
