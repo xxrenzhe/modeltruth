@@ -90,6 +90,15 @@ describe("dispute review flow", () => {
     expect(source).toContain("POST /api/disputes");
   });
 
+  it("renders Provider Truth/Risk subscription intake on public provider boards", () => {
+    const source = readFileSync("apps/web/src/app/[locale]/providers/[providerSlug]/page.tsx", "utf8");
+
+    expect(source).toContain("/api/providers/subscribe");
+    expect(source).toContain("risk_trend");
+    expect(source).toContain("weekly_digest");
+    expect(source).toContain("Truth/Risk changes");
+  });
+
   it("documents correction, provider response and takedown intake on the dispute page", () => {
     const source = readFileSync("apps/web/src/app/[locale]/dispute/page.tsx", "utf8");
 

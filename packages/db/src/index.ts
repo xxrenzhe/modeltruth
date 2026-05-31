@@ -446,6 +446,14 @@ export type {
   ProviderDisputeStatus
 } from "./disputes";
 export { createProviderDisputeRepository } from "./disputes";
+export type {
+  CreateProviderSubscriptionInput,
+  ProviderNotificationType,
+  ProviderSubscriptionRecord,
+  ProviderSubscriptionRepository,
+  ProviderSubscriptionStatus
+} from "./provider-subscriptions";
+export { createProviderSubscriptionRepository } from "./provider-subscriptions";
 export type { PlaygroundQuotaRepository, PlaygroundQuotaResult } from "./playground-quota";
 export { createPlaygroundQuotaRepository } from "./playground-quota";
 export type {

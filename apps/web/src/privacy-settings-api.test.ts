@@ -6,6 +6,7 @@ import {
   createAlertChannelRepository,
   createAuthRepository,
   createProviderNodeRepository,
+  createProviderSubscriptionRepository,
   ensureSqliteReady,
   saveAuditRun
 } from "@modeltruth/db";
@@ -84,6 +85,11 @@ describe("privacy settings API", () => {
     expect(body.export.user.email).toBe("privacy-export-route@example.com");
     expect(body.export.providerNodes[0]).toMatchObject({ apiKeySuffix: "cret" });
     expect(body.export.alertChannels[0]).toMatchObject({ type: "webhook", targetSuffix: "hooks.example.com" });
+    expect(body.export.providerSubscriptions[0]).toMatchObject({
+      providerSlug: "openrouter",
+      email: "privacy-export-route@example.com",
+      notificationType: "risk_trend"
+    });
     expect(body.export.auditRuns[0]).toMatchObject({ runId: "privacy_route_run" });
     expect(serialized).not.toContain("sk-route-secret");
     expect(serialized).not.toContain("hooks.example.com/private");
@@ -152,6 +158,14 @@ async function createPrivacyExportFixtures(workspaceId: string) {
     targetSuffix: "hooks.example.com"
   });
   await alerts.close();
+
+  const providerSubscriptions = await createProviderSubscriptionRepository();
+  await providerSubscriptions.create({
+    providerSlug: "openrouter",
+    email: "privacy-export-route@example.com",
+    notificationType: "risk_trend"
+  });
+  await providerSubscriptions.close();
 
   await saveAuditRun({
     id: "privacy_route_run",

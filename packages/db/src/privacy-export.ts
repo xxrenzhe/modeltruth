@@ -3,6 +3,7 @@ import type { AuthUser, AuthWorkspace, PrivacyExport, WorkspaceMembershipExport 
 import { listAuditRuns } from "./audit-runs";
 import { createAlertChannelRepository } from "./alert-channels";
 import { createProviderNodeRepository } from "./provider-nodes";
+import { createProviderSubscriptionRepository } from "./provider-subscriptions";
 import { normalizePublicUsage } from "./public-usage";
 
 export async function buildPrivacyExport(input: { user: AuthUser; databaseUrl?: string }): Promise<PrivacyExport> {
@@ -15,12 +16,13 @@ export async function buildPrivacyExport(input: { user: AuthUser; databaseUrl?: 
   const workspaceIds = [...new Set([...workspaces.map((item) => item.id), ...workspaceMemberships.map((item) => item.id)])];
   const providerNodes = (await Promise.all(workspaceIds.map(listWorkspaceNodes))).flat();
   const alertChannels = (await Promise.all(workspaceIds.map(listWorkspaceAlertChannels))).flat();
+  const providerSubscriptions = await listProviderSubscriptions(input.user.email);
   const auditRuns = (await Promise.all(workspaceIds.map((workspaceId) => listAuditRuns({ workspaceId, limit: 500 })))).flat().map((run) => ({
     ...run,
     assertions: sanitizeAssertions(run.assertions),
     evidenceSummary: sanitizeEvidenceSummary(run.evidenceSummary)
   }));
-  return { user: input.user, workspaces, workspaceMemberships, providerNodes, alertChannels, auditRuns };
+  return { user: input.user, workspaces, workspaceMemberships, providerNodes, alertChannels, providerSubscriptions, auditRuns };
 }
 
 async function sqliteWorkspaces(userId: string) {
@@ -82,6 +84,15 @@ async function listWorkspaceAlertChannels(workspaceId: string) {
   const repo = await createAlertChannelRepository();
   try {
     return await repo.list(workspaceId);
+  } finally {
+    await repo.close();
+  }
+}
+
+async function listProviderSubscriptions(email: string) {
+  const repo = await createProviderSubscriptionRepository();
+  try {
+    return await repo.listByEmail(email);
   } finally {
     await repo.close();
   }

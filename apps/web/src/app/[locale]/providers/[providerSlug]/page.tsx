@@ -130,6 +130,28 @@ export default async function ProviderPage({
         </div>
       </section>
       <section className="card">
+        <div className="eyebrow">Provider risk alerts</div>
+        <h2>Subscribe to Truth/Risk changes</h2>
+        <p className="lede">
+          Get a lightweight email when this provider moves into repeated public risk flags or when the weekly digest is ready.
+        </p>
+        <form className="formGrid" action="/api/providers/subscribe" method="post">
+          <input name="providerSlug" type="hidden" value={provider.slug} />
+          <label>
+            Work email
+            <input name="email" placeholder="you@example.com" required type="email" />
+          </label>
+          <label>
+            Notification type
+            <select name="notificationType" defaultValue="risk_trend">
+              <option value="risk_trend">Truth/Risk trend changes</option>
+              <option value="weekly_digest">Weekly provider digest</option>
+            </select>
+          </label>
+          <button className="button primary" type="submit">Subscribe</button>
+        </form>
+      </section>
+      <section className="card">
         <div className="eyebrow">Risk flags</div>
         <h2>Anonymous evidence trace</h2>
         <p className="lede">

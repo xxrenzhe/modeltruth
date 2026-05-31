@@ -5,6 +5,7 @@ import { buildPrivacyExport } from "./privacy-export";
 import type { AlertChannelRecord } from "./alert-channels";
 import type { AuditRunListItem } from "./audit-runs";
 import type { ProviderNodeRecord } from "./provider-nodes";
+import type { ProviderSubscriptionRecord } from "./provider-subscriptions";
 
 export interface AuthUser {
   id: string;
@@ -31,6 +32,7 @@ export interface PrivacyExport {
   workspaceMemberships: WorkspaceMembershipExport[];
   providerNodes: ProviderNodeRecord[];
   alertChannels: AlertChannelRecord[];
+  providerSubscriptions: ProviderSubscriptionRecord[];
   auditRuns: AuditRunListItem[];
 }
 
@@ -166,6 +168,7 @@ class SqliteAuthRepository implements AuthRepository {
         this.db.prepare("delete from alert_channels where workspace_id = ?").run(workspace.id);
         this.db.prepare("delete from jobs where payload_json like ?").run(`%"workspaceId":"${workspace.id}"%`);
       }
+      this.db.prepare("delete from provider_subscriptions where email = ?").run(user.email);
       this.db.prepare("delete from auth_sessions where user_id = ?").run(userId);
       this.db.prepare("delete from auth_magic_links where email = ?").run(user.email);
       this.db.prepare("delete from workspaces where owner_id = ?").run(userId);
@@ -329,6 +332,7 @@ class PostgresAuthRepository implements AuthRepository {
         await tx`delete from alert_channels where workspace_id = ${workspace.id}`;
         await tx`delete from jobs where payload_json like ${`%"workspaceId":"${workspace.id}"%`}`;
       }
+      await tx`delete from provider_subscriptions where email = ${user.email}`;
       await tx`delete from auth_sessions where user_id = ${userId}`;
       await tx`delete from auth_magic_links where email = ${user.email}`;
       await tx`delete from workspaces where owner_id = ${userId}`;

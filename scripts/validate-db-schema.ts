@@ -12,6 +12,7 @@ const criticalTables = [
   "content_pages",
   "model_registry",
   "model_calibrations",
+  "provider_subscriptions",
   "migration_history"
 ];
 
@@ -26,7 +27,8 @@ const criticalColumns: Record<string, string[]> = {
   provider_disputes: ["provider_slug", "request_type", "status", "review_due_at", "review_started_at"],
   workspace_members: ["workspace_id", "email", "role", "status"],
   workspace_privacy_settings: ["workspace_id", "save_full_responses"],
-  byo_probes: ["workspace_id", "region", "token_hash", "status", "last_seen_at"]
+  byo_probes: ["workspace_id", "region", "token_hash", "status", "last_seen_at"],
+  provider_subscriptions: ["provider_slug", "email", "notification_type", "status"]
 };
 
 const criticalIndexes = [
@@ -42,7 +44,8 @@ const criticalIndexes = [
   "idx_provider_disputes_review_due",
   "idx_provider_disputes_request_type",
   "idx_workspace_members_workspace_status",
-  "idx_byo_probes_token_hash"
+  "idx_byo_probes_token_hash",
+  "idx_provider_subscriptions_provider_status"
 ];
 
 const health = await checkDatabaseHealth();

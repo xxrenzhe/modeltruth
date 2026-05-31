@@ -306,6 +306,24 @@
         "postgres": "select column_name from information_schema.columns where table_schema='public' and table_name='provider_nodes' and column_name='ttft_threshold_ms';"
       },
       "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    },
+    {
+      "number": "017",
+      "name": "provider_subscriptions",
+      "sqliteMigration": "017_provider_subscriptions.sql",
+      "postgresMigration": "017_provider_subscriptions.pg.sql",
+      "impactQueries": [
+        "Provider Truth Board visitor subscriptions for risk trend alerts and weekly digest targeting by provider/status."
+      ],
+      "rollback": {
+        "sqlite": "Append a forward migration disabling provider subscription APIs and dropping provider_subscriptions before public launch if required.",
+        "postgres": "Append a forward migration disabling provider subscription APIs and dropping provider_subscriptions before public launch if required."
+      },
+      "validationSql": {
+        "sqlite": "select name from sqlite_master where type='table' and name='provider_subscriptions';",
+        "postgres": "select table_name from information_schema.tables where table_schema='public' and table_name='provider_subscriptions';"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
     }
   ]
 }
