@@ -1,27 +1,40 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
+
 export interface AppConfig {
-  databaseUrl?: string;
   databasePath: string;
+  databaseUrl?: string;
+  encryptionKey: string;
   nodeEnv: string;
 }
 
 export function getAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  const projectRoot = findProjectRoot(process.cwd());
+  const root = resolveProjectRoot(env);
   return {
-    databaseUrl: env.DATABASE_URL,
-    databasePath: env.DATABASE_PATH ?? `${projectRoot}/data/modeltruth.sqlite`,
+    databasePath: env.DATABASE_PATH ?? path.join(root, "data", "modeltruth.sqlite"),
+    databaseUrl: emptyToUndefined(env.DATABASE_URL),
+    encryptionKey:
+      env.APP_SECRET_ENCRYPTION_KEY ??
+      env.MODELTRUTH_ENCRYPTION_KEY ??
+      env.ENCRYPTION_KEY ??
+      "modeltruth-local-development-key",
     nodeEnv: env.NODE_ENV ?? "development"
   };
 }
 
-function findProjectRoot(start: string): string {
-  let current = start;
-  while (current !== "/") {
-    if (existsSync(`${current}/migrations`) && existsSync(`${current}/package.json`)) {
+function emptyToUndefined(value: string | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function resolveProjectRoot(env: NodeJS.ProcessEnv) {
+  let current = env.MODELTRUTH_ROOT ?? env.INIT_CWD ?? process.cwd();
+  while (true) {
+    if (existsSync(path.join(current, "migrations")) && existsSync(path.join(current, "package.json"))) {
       return current;
     }
-    current = dirname(current);
+    const parent = path.dirname(current);
+    if (parent === current) return process.cwd();
+    current = parent;
   }
-  return start;
 }
-import { existsSync } from "node:fs";
-import { dirname } from "node:path";

@@ -1,4 +1,21 @@
+import type { Locale } from "@modeltruth/i18n";
+import { buildSeoMetadata, faqPageJsonLd, jsonLdScript } from "@modeltruth/seo";
 import { BillingCheckoutButton, BillingPortalButton } from "./billing-actions";
+
+export async function generateMetadata({
+  params
+}: {
+  params: Promise<{ locale: Locale }>;
+}) {
+  const { locale } = await params;
+  return buildSeoMetadata({
+    locale,
+    path: "/pricing",
+    title: "AI API monitoring pricing | ModelTruth.ai",
+    description:
+      "Subscription pricing for AI API anti-cheat monitoring, private nodes, alerts and evidence exports."
+  });
+}
 
 export default function PricingPage() {
   const plans = [
@@ -9,6 +26,21 @@ export default function PricingPage() {
 
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={jsonLdScript(
+          faqPageJsonLd([
+            {
+              question: "Does ModelTruth take supplier commission?",
+              answer: "No. ModelTruth is a subscription SaaS and does not sell AI API traffic."
+            },
+            {
+              question: "Are Playground API keys stored?",
+              answer: "No. Free Playground keys are used only for the current audit run."
+            }
+          ])
+        )}
+      />
       <section className="metricGrid">
         {plans.map((plan) => (
           <div className="card formGrid" key={plan.name}>

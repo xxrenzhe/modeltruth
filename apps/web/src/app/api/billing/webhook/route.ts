@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { createBillingRepository, type UpdateWorkspaceBillingInput } from "@modeltruth/db";
+import { createBillingRepository } from "@modeltruth/db";
 import { verifyStripeWebhook, type StripeEvent } from "../../../../lib/stripe";
+import { processStripeEvent } from "../../../../lib/billing-webhook";
 
 export async function POST(request: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -23,44 +24,4 @@ export async function POST(request: Request) {
   } finally {
     await billing.close();
   }
-}
-
-async function processStripeEvent(
-  event: StripeEvent,
-  updateWorkspaceBilling: (input: UpdateWorkspaceBillingInput) => Promise<void>
-) {
-  const object = event.data.object;
-  if (event.type === "checkout.session.completed") {
-    await updateWorkspaceBilling({
-      workspaceId: stringValue(object.client_reference_id) ?? metadataValue(object, "workspaceId"),
-      stripeCustomerId: stringValue(object.customer),
-      stripeSubscriptionId: stringValue(object.subscription),
-      subscriptionStatus: "active",
-      tier: normalizeTier(metadataValue(object, "tier"))
-    });
-    return;
-  }
-
-  if (event.type.startsWith("customer.subscription.")) {
-    await updateWorkspaceBilling({
-      stripeCustomerId: stringValue(object.customer),
-      stripeSubscriptionId: stringValue(object.id),
-      subscriptionStatus: stringValue(object.status) ?? "inactive",
-      tier: normalizeTier(metadataValue(object, "tier"))
-    });
-  }
-}
-
-function stringValue(value: unknown): string | undefined {
-  return typeof value === "string" && value ? value : undefined;
-}
-
-function normalizeTier(value: string | undefined): string {
-  return value === "team" ? "team" : "pro";
-}
-
-function metadataValue(object: Record<string, unknown>, key: string): string | undefined {
-  const metadata = object.metadata;
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined;
-  return stringValue((metadata as Record<string, unknown>)[key]);
 }

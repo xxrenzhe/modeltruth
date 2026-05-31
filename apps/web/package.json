@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start -p 3000"
+    "start": "npm --prefix ../.. run db:init && next start -p 3000",
+    "start:raw": "next start -p 3000"
   }
 }

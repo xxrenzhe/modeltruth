@@ -45,6 +45,7 @@ export default async function LocaleLayout({
               <a href={`/${locale}/providers/openai`}>{dictionary.nav.providers}</a>
               <a href={`/${locale}/methodology`}>{dictionary.nav.methodology}</a>
               <a href={`/${locale}/pricing`}>{dictionary.nav.pricing}</a>
+              <a href={`/${locale}/settings/privacy`}>Privacy settings</a>
               <a href={`/${locale}/workspace`}>{dictionary.nav.workspace}</a>
               <a href={`/${locale}/evidence`}>{dictionary.nav.evidence}</a>
               <a href={`/${locale}/login`}>{dictionary.nav.login}</a>

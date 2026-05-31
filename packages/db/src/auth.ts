@@ -1,6 +1,10 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { getAppConfig } from "@modeltruth/config";
+import { buildPrivacyExport } from "./privacy-export";
+import type { AlertChannelRecord } from "./alert-channels";
+import type { AuditRunListItem } from "./audit-runs";
+import type { ProviderNodeRecord } from "./provider-nodes";
 
 export interface AuthUser {
   id: string;
@@ -21,6 +25,20 @@ export interface AuthSession {
   workspace: AuthWorkspace;
 }
 
+export interface PrivacyExport {
+  user: AuthUser;
+  workspaces: AuthWorkspace[];
+  workspaceMemberships: WorkspaceMembershipExport[];
+  providerNodes: ProviderNodeRecord[];
+  alertChannels: AlertChannelRecord[];
+  auditRuns: AuditRunListItem[];
+}
+
+export interface WorkspaceMembershipExport extends AuthWorkspace {
+  role: string;
+  status: string;
+}
+
 export interface MagicLink {
   token: string;
   email: string;
@@ -32,6 +50,8 @@ export interface AuthRepository {
   consumeMagicLink(token: string, ttlSeconds?: number): Promise<{ sessionToken: string; session: AuthSession } | undefined>;
   getSession(sessionToken: string): Promise<AuthSession | undefined>;
   destroySession(sessionToken: string): Promise<void>;
+  exportUserData(userId: string): Promise<PrivacyExport | undefined>;
+  deleteUserAccount(userId: string): Promise<boolean>;
   close(): Promise<void>;
 }
 
@@ -72,6 +92,7 @@ class SqliteAuthRepository implements AuthRepository {
     try {
       const user = this.ensureUser(link.email, now);
       const workspace = this.ensureWorkspace(user.id, user.email, now);
+      this.acceptWorkspaceInvite(workspace.id, user.id, user.email, now);
       sessionToken = createToken();
       sessionId = randomUUID();
       this.db
@@ -115,6 +136,48 @@ class SqliteAuthRepository implements AuthRepository {
     this.db.prepare("delete from auth_sessions where token_hash = ?").run(hashToken(sessionToken));
   }
 
+  async exportUserData(userId: string): Promise<PrivacyExport | undefined> {
+    const user = this.db.prepare("select id, email, name from users where id = ? limit 1").get(userId) as AuthUser | undefined;
+    if (!user) return undefined;
+    return buildPrivacyExport({ user });
+  }
+
+  async deleteUserAccount(userId: string): Promise<boolean> {
+    const user = this.db.prepare("select id, email from users where id = ? limit 1").get(userId) as AuthUser | undefined;
+    if (!user) return false;
+    const now = nowIso();
+    this.db.exec("BEGIN");
+    try {
+      const workspaces = this.db.prepare("select id from workspaces where owner_id = ?").all(userId) as Array<{ id: string }>;
+      for (const workspace of workspaces) {
+        this.db
+          .prepare(
+            `update provider_nodes
+             set status = 'deleted',
+                 encrypted_api_key = null,
+                 api_key_suffix = null,
+                 next_heartbeat_at = null,
+                 next_deep_audit_at = null,
+                 deleted_at = coalesce(deleted_at, ?),
+                 updated_at = ?
+             where workspace_id = ?`
+          )
+          .run(now, now, workspace.id);
+        this.db.prepare("delete from alert_channels where workspace_id = ?").run(workspace.id);
+        this.db.prepare("delete from jobs where payload_json like ?").run(`%"workspaceId":"${workspace.id}"%`);
+      }
+      this.db.prepare("delete from auth_sessions where user_id = ?").run(userId);
+      this.db.prepare("delete from auth_magic_links where email = ?").run(user.email);
+      this.db.prepare("delete from workspaces where owner_id = ?").run(userId);
+      this.db.prepare("delete from users where id = ?").run(userId);
+      this.db.exec("COMMIT");
+      return true;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
   async close(): Promise<void> {
     this.db.close();
   }
@@ -130,6 +193,17 @@ class SqliteAuthRepository implements AuthRepository {
   }
 
   private ensureWorkspace(ownerId: string, email: string, now: string): AuthWorkspace {
+    const invited = this.db
+      .prepare(
+        `select w.id, w.name, w.tier
+         from workspace_members wm
+         join workspaces w on w.id = wm.workspace_id
+         where wm.email = ? and wm.status = 'invited'
+         order by wm.invited_at asc
+         limit 1`
+      )
+      .get(email) as AuthWorkspace | undefined;
+    if (invited) return invited;
     const existing = this.db
       .prepare("select id, name, tier from workspaces where owner_id = ? order by created_at asc limit 1")
       .get(ownerId) as AuthWorkspace | undefined;
@@ -138,14 +212,27 @@ class SqliteAuthRepository implements AuthRepository {
     this.db
       .prepare("insert into workspaces (id, owner_id, name, tier, created_at, updated_at) values (?, ?, ?, ?, ?, ?)")
       .run(workspace.id, ownerId, workspace.name, workspace.tier, now, now);
+    this.db
+      .prepare(
+        `insert or ignore into workspace_members
+         (id, workspace_id, user_id, email, role, status, invited_by_user_id, invited_at, joined_at, updated_at)
+         values (?, ?, ?, ?, 'owner', 'active', ?, ?, ?, ?)`
+      )
+      .run(`owner-${workspace.id}`, workspace.id, ownerId, email, ownerId, now, now, now);
     return workspace;
+  }
+
+  private acceptWorkspaceInvite(workspaceId: string, userId: string, email: string, now: string) {
+    this.db
+      .prepare("update workspace_members set user_id = ?, status = 'active', joined_at = coalesce(joined_at, ?), updated_at = ? where workspace_id = ? and email = ?")
+      .run(userId, now, now, workspaceId, email);
   }
 }
 
 class PostgresAuthRepository implements AuthRepository {
   private readonly sql: postgres.Sql;
 
-  constructor(databaseUrl: string) {
+  constructor(private readonly databaseUrl: string) {
     this.sql = postgres(databaseUrl, { max: 1 });
   }
 
@@ -176,6 +263,7 @@ class PostgresAuthRepository implements AuthRepository {
 
       const user = await ensurePostgresUser(tx, link.email, now);
       const workspace = await ensurePostgresWorkspace(tx, user.id, user.email, now);
+      await acceptPostgresWorkspaceInvite(tx, workspace.id, user.id, user.email, now);
       sessionToken = createToken();
       await tx`
         insert into auth_sessions (id, user_id, workspace_id, token_hash, expires_at, created_at, last_seen_at)
@@ -212,6 +300,43 @@ class PostgresAuthRepository implements AuthRepository {
     await this.sql`delete from auth_sessions where token_hash = ${hashToken(sessionToken)}`;
   }
 
+  async exportUserData(userId: string): Promise<PrivacyExport | undefined> {
+    const users = await this.sql<AuthUser[]>`select id, email, name from users where id = ${userId} limit 1`;
+    const user = users[0];
+    if (!user) return undefined;
+    return buildPrivacyExport({ user, databaseUrl: this.databaseUrl });
+  }
+
+  async deleteUserAccount(userId: string): Promise<boolean> {
+    const users = await this.sql<AuthUser[]>`select id, email from users where id = ${userId} limit 1`;
+    const user = users[0];
+    if (!user) return false;
+    const now = nowIso();
+    await this.sql.begin(async (tx) => {
+      const workspaces = await tx<{ id: string }[]>`select id from workspaces where owner_id = ${userId}`;
+      for (const workspace of workspaces) {
+        await tx`
+          update provider_nodes
+          set status = 'deleted',
+              encrypted_api_key = null,
+              api_key_suffix = null,
+              next_heartbeat_at = null,
+              next_deep_audit_at = null,
+              deleted_at = coalesce(deleted_at, ${now}),
+              updated_at = ${now}
+          where workspace_id = ${workspace.id}
+        `;
+        await tx`delete from alert_channels where workspace_id = ${workspace.id}`;
+        await tx`delete from jobs where payload_json like ${`%"workspaceId":"${workspace.id}"%`}`;
+      }
+      await tx`delete from auth_sessions where user_id = ${userId}`;
+      await tx`delete from auth_magic_links where email = ${user.email}`;
+      await tx`delete from workspaces where owner_id = ${userId}`;
+      await tx`delete from users where id = ${userId}`;
+    });
+    return true;
+  }
+
   async close(): Promise<void> {
     await this.sql.end();
   }
@@ -234,6 +359,15 @@ async function ensurePostgresWorkspace(
   email: string,
   now: string
 ): Promise<AuthWorkspace> {
+  const invited = await tx<AuthWorkspace[]>`
+    select w.id, w.name, w.tier
+    from workspace_members wm
+    join workspaces w on w.id = wm.workspace_id
+    where wm.email = ${email} and wm.status = 'invited'
+    order by wm.invited_at asc
+    limit 1
+  `;
+  if (invited[0]) return invited[0];
   const existing = await tx<AuthWorkspace[]>`
     select id, name, tier from workspaces where owner_id = ${ownerId} order by created_at asc limit 1
   `;
@@ -243,7 +377,20 @@ async function ensurePostgresWorkspace(
     insert into workspaces (id, owner_id, name, tier, created_at, updated_at)
     values (${workspace.id}, ${ownerId}, ${workspace.name}, ${workspace.tier}, ${now}, ${now})
   `;
+  await tx`
+    insert into workspace_members (id, workspace_id, user_id, email, role, status, invited_by_user_id, invited_at, joined_at, updated_at)
+    values (${"owner-" + workspace.id}, ${workspace.id}, ${ownerId}, ${email}, 'owner', 'active', ${ownerId}, ${now}, ${now}, ${now})
+    on conflict (workspace_id, email) do nothing
+  `;
   return workspace;
+}
+
+async function acceptPostgresWorkspaceInvite(tx: postgres.TransactionSql, workspaceId: string, userId: string, email: string, now: string) {
+  await tx`
+    update workspace_members
+    set user_id = ${userId}, status = 'active', joined_at = coalesce(joined_at, ${now}), updated_at = ${now}
+    where workspace_id = ${workspaceId} and email = ${email}
+  `;
 }
 
 interface MagicLinkRow {

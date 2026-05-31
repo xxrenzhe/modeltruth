@@ -1,8 +1,17 @@
-import { createJobRepository, createProviderNodeRepository, ensureDatabaseReady } from "@modeltruth/db";
+import {
+  applyAuditRetentionPolicy,
+  createJobRepository,
+  createModelRegistryRepository,
+  createProviderNodeRepository,
+  ensureDatabaseReady
+} from "@modeltruth/db";
+import { installGracefulShutdown, writeJsonLog } from "@modeltruth/shared";
 
 const intervalMs = Number(process.env.SCHEDULER_INTERVAL_MS ?? 60_000);
+const calibrationIntervalMs = Number(process.env.MODELTRUTH_CALIBRATION_INTERVAL_MS ?? 7 * 24 * 60 * 60 * 1000);
 
 export async function runSchedulerTick() {
+  await runRetentionMaintenance();
   const jobs = await createJobRepository();
   const nodes = await createProviderNodeRepository();
   try {
@@ -10,41 +19,101 @@ export async function runSchedulerTick() {
     const dueNodes = await nodes.listDueForSchedule(now);
     for (const node of dueNodes) {
       if (!node.nextHeartbeatAt || new Date(node.nextHeartbeatAt) <= now) {
-        const job = await jobs.enqueue({
-          type: "heartbeat",
-          payload: { source: "scheduler", nodeId: node.id, scheduledAt: now.toISOString() }
-        });
-        await nodes.markScheduled(node.id, "heartbeat", new Date(now.getTime() + node.heartbeatIntervalSeconds * 1000));
-        console.log(`[scheduler] enqueued ${job.type} job ${job.id} for node ${node.id}`);
+        const fingerprint = scheduleFingerprint(node.id, "heartbeat", now, node.heartbeatIntervalSeconds);
+        if (!(await jobs.hasActiveFingerprint("heartbeat", fingerprint))) {
+          const job = await jobs.enqueue({
+            type: "heartbeat",
+            payload: { source: "scheduler", nodeId: node.id, scheduledAt: now.toISOString(), fingerprint }
+          });
+          await nodes.markScheduled(node.id, "heartbeat", new Date(now.getTime() + node.heartbeatIntervalSeconds * 1000));
+          writeJsonLog({
+            service: "scheduler",
+            event: "job.enqueued",
+            data: { jobId: job.id, jobType: job.type, nodeId: node.id }
+          });
+        }
       }
       if (!node.nextDeepAuditAt || new Date(node.nextDeepAuditAt) <= now) {
-        const job = await jobs.enqueue({
-          type: "deepAudit",
-          payload: { source: "scheduler", nodeId: node.id, suiteId: "smoke@1.0.0", scheduledAt: now.toISOString() }
-        });
-        await nodes.markScheduled(node.id, "deepAudit", new Date(now.getTime() + node.deepAuditIntervalSeconds * 1000));
-        console.log(`[scheduler] enqueued ${job.type} job ${job.id} for node ${node.id}`);
+        const fingerprint = scheduleFingerprint(node.id, "deepAudit", now, node.deepAuditIntervalSeconds);
+        if (!(await jobs.hasActiveFingerprint("deepAudit", fingerprint))) {
+          const job = await jobs.enqueue({
+            type: "deepAudit",
+            payload: { source: "scheduler", nodeId: node.id, suiteId: "smoke@1.0.0", scheduledAt: now.toISOString(), fingerprint }
+          });
+          await nodes.markScheduled(node.id, "deepAudit", new Date(now.getTime() + node.deepAuditIntervalSeconds * 1000));
+          writeJsonLog({
+            service: "scheduler",
+            event: "job.enqueued",
+            data: { jobId: job.id, jobType: job.type, nodeId: node.id }
+          });
+        }
       }
     }
-    if (dueNodes.length === 0) console.log("[scheduler] no provider nodes due");
+    if (dueNodes.length === 0) writeJsonLog({ service: "scheduler", event: "nodes.none_due" });
+    await enqueueDueCalibrations(jobs, now);
   } finally {
     await nodes.close();
     await jobs.close();
   }
 }
 
+function scheduleFingerprint(nodeId: string, type: "heartbeat" | "deepAudit", now: Date, intervalSeconds: number) {
+  const windowStart = Math.floor(now.getTime() / Math.max(intervalSeconds, 1) / 1000);
+  return `${type}:${nodeId}:${windowStart}`;
+}
+
+async function runRetentionMaintenance() {
+  const result = await applyAuditRetentionPolicy();
+  if (result.deletedAggregateRuns || result.deletedFreePlaygroundRuns || result.redactedPrivateEvidenceRuns) {
+    writeJsonLog({ service: "scheduler", event: "retention.applied", data: { ...result } });
+  }
+}
+
+async function enqueueDueCalibrations(jobs: Awaited<ReturnType<typeof createJobRepository>>, now: Date) {
+  const registry = await createModelRegistryRepository();
+  try {
+    const cutoff = new Date(now.getTime() - calibrationIntervalMs);
+    const dueModels = await registry.listDueForCalibration(cutoff);
+    for (const model of dueModels) {
+      const suiteId = model.baselineSuiteVersion;
+      const fingerprint = `calibration:${model.provider}:${model.modelId}:${suiteId}`;
+      if (await jobs.hasActiveFingerprint("calibration", fingerprint)) continue;
+      const job = await jobs.enqueue({
+        type: "calibration",
+        maxAttempts: 2,
+        payload: {
+          source: "scheduler",
+          fingerprint,
+          provider: model.provider,
+          modelId: model.modelId,
+          suiteId,
+          scheduledAt: now.toISOString()
+        }
+      });
+      writeJsonLog({
+        service: "scheduler",
+        event: "job.enqueued",
+        data: { jobId: job.id, jobType: job.type, provider: model.provider, modelId: model.modelId }
+      });
+    }
+  } finally {
+    await registry.close();
+  }
+}
+
 async function main() {
-  await ensureDatabaseReady();
+  if (process.env.SKIP_RUNTIME_DB_INIT !== "true") await ensureDatabaseReady();
   await runSchedulerTick();
   if (process.env.RUN_ONCE === "1") return;
-  setInterval(() => {
-    runSchedulerTick().catch((error) => console.error("[scheduler] tick failed", error));
+  const timer = setInterval(() => {
+    runSchedulerTick().catch((error) => writeJsonLog({ service: "scheduler", event: "tick.failed", level: "error", error }));
   }, intervalMs);
+  installGracefulShutdown({ service: "scheduler", cleanup: () => clearInterval(timer) });
 }
 
 if (process.argv[1]?.endsWith("apps/scheduler/src/index.ts")) {
   main().catch((error) => {
-    console.error("[scheduler] fatal", error);
+    writeJsonLog({ service: "scheduler", event: "fatal", level: "error", error });
     process.exit(1);
   });
 }

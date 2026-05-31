@@ -1,7 +1,7 @@
 import postgres from "postgres";
 import { getAppConfig } from "@modeltruth/config";
 
-export type AlertChannelType = "webhook" | "slack" | "discord";
+export type AlertChannelType = "webhook" | "slack" | "discord" | "email" | "telegram";
 
 export interface AlertChannelRecord {
   id: string;
@@ -48,10 +48,10 @@ class SqliteAlertChannelRepository implements AlertChannelRepository {
     const id = crypto.randomUUID();
     this.db
       .prepare(
-        `insert into alert_channels (id, workspace_id, type, encrypted_target, enabled, created_at, updated_at)
-         values (?, ?, ?, ?, 1, ?, ?)`
+        `insert into alert_channels (id, workspace_id, type, encrypted_target, target_suffix, enabled, created_at, updated_at)
+         values (?, ?, ?, ?, ?, 1, ?, ?)`
       )
-      .run(id, input.workspaceId, input.type, input.encryptedTarget, now, now);
+      .run(id, input.workspaceId, input.type, input.encryptedTarget, input.targetSuffix ?? null, now, now);
     return (await this.list(input.workspaceId)).find((channel) => channel.id === id)!;
   }
 
@@ -85,8 +85,8 @@ class PostgresAlertChannelRepository implements AlertChannelRepository {
     const now = new Date().toISOString();
     const id = crypto.randomUUID();
     await this.sql`
-      insert into alert_channels (id, workspace_id, type, encrypted_target, enabled, created_at, updated_at)
-      values (${id}, ${input.workspaceId}, ${input.type}, ${input.encryptedTarget}, 1, ${now}, ${now})
+      insert into alert_channels (id, workspace_id, type, encrypted_target, target_suffix, enabled, created_at, updated_at)
+      values (${id}, ${input.workspaceId}, ${input.type}, ${input.encryptedTarget}, ${input.targetSuffix ?? null}, 1, ${now}, ${now})
     `;
     return (await this.list(input.workspaceId)).find((channel) => channel.id === id)!;
   }
@@ -115,6 +115,7 @@ interface AlertChannelRow {
   workspace_id: string;
   type: AlertChannelType;
   encrypted_target: string;
+  target_suffix?: string;
   enabled: number | boolean;
   created_at: string;
   updated_at: string;
@@ -126,7 +127,7 @@ function mapAlertChannelRow(row: AlertChannelRow): AlertChannelRecord {
     workspaceId: row.workspace_id,
     type: row.type,
     enabled: row.enabled === true || row.enabled === 1,
-    targetSuffix: targetSuffix(row.encrypted_target),
+    targetSuffix: row.target_suffix,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -137,8 +138,4 @@ function mapAlertChannelSecretRow(row: AlertChannelRow): AlertChannelSecretRecor
     ...mapAlertChannelRow(row),
     encryptedTarget: row.encrypted_target
   };
-}
-
-function targetSuffix(value: string) {
-  return value.length <= 8 ? value : value.slice(-8);
 }

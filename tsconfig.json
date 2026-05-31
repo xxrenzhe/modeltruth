@@ -31,5 +31,5 @@
     "vitest.config.ts",
     "next-env.d.ts"
   ],
-  "exclude": ["node_modules", ".next", "dist", "coverage"]
+  "exclude": ["node_modules", ".next", "apps/**/.next", "dist", "coverage"]
 }

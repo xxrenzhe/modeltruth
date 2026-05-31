@@ -34,4 +34,5 @@ COPY --from=builder /app/infra/docker-entrypoint.sh ./infra/docker-entrypoint.sh
 RUN chown -R modeltruth:modeltruth /app /var/log
 USER modeltruth
 EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD node --import tsx scripts/healthcheck.ts
 CMD ["sh", "infra/docker-entrypoint.sh"]

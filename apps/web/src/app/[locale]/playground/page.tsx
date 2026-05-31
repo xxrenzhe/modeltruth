@@ -1,44 +1,51 @@
-import { getDictionary, type Locale } from "@modeltruth/i18n";
+import type { Locale } from "@modeltruth/i18n";
+import { buildSeoMetadata, faqPageJsonLd, jsonLdScript } from "@modeltruth/seo";
+import { PlaygroundClient } from "./playground-client";
 
-export default async function PlaygroundPage({
+export async function generateMetadata({
   params
 }: {
   params: Promise<{ locale: Locale }>;
 }) {
   const { locale } = await params;
-  const dictionary = getDictionary(locale);
+  return buildSeoMetadata({
+    locale,
+    path: "/playground",
+    title: "Test an OpenAI-compatible API | ModelTruth.ai",
+    description:
+      "Run a stateless smoke audit against an OpenAI-compatible endpoint without storing your API key."
+  });
+}
 
+export default function PlaygroundPage() {
   return (
-    <section className="hero">
-      <div>
-        <div className="eyebrow">{dictionary.playground.eyebrow}</div>
-        <h1>{dictionary.playground.title}</h1>
-        <p className="lede">{dictionary.playground.lede}</p>
-      </div>
-      <form className="card formGrid" action="/api/playground/audit" method="post">
-        <label>
-          Base URL
-          <input name="baseUrl" placeholder="https://api.example.com/v1" required />
-        </label>
-        <label>
-          API Key
-          <input name="apiKey" placeholder="sk-..." type="password" required />
-        </label>
-        <label>
-          Model
-          <input name="model" placeholder="gpt-5.1" required />
-        </label>
-        <label>
-          Suite
-          <select name="suiteId" defaultValue="smoke@1.0.0">
-            <option value="smoke@1.0.0">smoke@1.0.0</option>
-            <option value="reasoning-lite@1.0.0">reasoning-lite@1.0.0</option>
-          </select>
-        </label>
-        <button className="button" type="submit">
-          {dictionary.playground.submit}
-        </button>
-      </form>
-    </section>
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={jsonLdScript(
+          faqPageJsonLd([
+            {
+              question: "Does the Playground store API keys?",
+              answer: "No. Keys are used only in memory for the current audit request."
+            },
+            {
+              question: "Which lightweight suites does the Playground support?",
+              answer: "It supports smoke, reasoning-lite and context-lite audits without storing API keys."
+            }
+          ])
+        )}
+      />
+      <section className="hero compactHero">
+        <div>
+          <div className="eyebrow">Stateless Playground</div>
+          <h1>Audit an endpoint without storing the key.</h1>
+          <p className="lede">
+            Run a lightweight OpenAI-compatible API smoke, reasoning or context audit. API keys are redacted and
+            are not persisted by the Free Playground.
+          </p>
+        </div>
+      </section>
+      <PlaygroundClient />
+    </>
   );
 }

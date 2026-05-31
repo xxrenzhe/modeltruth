@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "modeltruth.audit-suite-governance.v1",
+  "suites": [
+    {
+      "suite": "smoke@1.0.0",
+      "changelog": "Initial public availability, latency, HTTP, usage and response-shape smoke assertions.",
+      "officialBaseline": {
+        "provider": "openai",
+        "modelId": "gpt-5.1",
+        "recordedAt": "2026-05-31T00:00:00.000Z",
+        "method": "seeded model registry calibration job"
+      }
+    },
+    {
+      "suite": "reasoning-lite@1.0.0",
+      "changelog": "Initial private reasoning nonce and deterministic answer assertions.",
+      "officialBaseline": {
+        "provider": "openai",
+        "modelId": "gpt-5.1",
+        "recordedAt": "2026-05-31T00:00:00.000Z",
+        "method": "seeded model registry calibration job"
+      }
+    },
+    {
+      "suite": "context-lite@1.0.0",
+      "changelog": "Initial private synthetic context needle retrieval assertions for 8K-32K checks.",
+      "officialBaseline": {
+        "provider": "openai",
+        "modelId": "gpt-5.1",
+        "recordedAt": "2026-05-31T00:00:00.000Z",
+        "method": "seeded model registry calibration job"
+      }
+    },
+    {
+      "suite": "billing-lite@1.0.0",
+      "changelog": "Initial private usage metadata and billing variance assertions with automatic retest requirement.",
+      "officialBaseline": {
+        "provider": "openai",
+        "modelId": "gpt-5.1",
+        "recordedAt": "2026-05-31T00:00:00.000Z",
+        "method": "seeded model registry calibration job"
+      }
+    },
+    {
+      "suite": "fingerprint-calibration@1.0.0",
+      "changelog": "Initial internal official-model baseline sampling suite for model registry calibration.",
+      "officialBaseline": {
+        "provider": "openai",
+        "modelId": "gpt-5.1",
+        "recordedAt": "2026-05-31T00:00:00.000Z",
+        "method": "scheduled calibration job using official provider endpoint"
+      }
+    }
+  ]
+}

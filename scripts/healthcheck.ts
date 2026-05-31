@@ -1,6 +1,7 @@
-const response = await fetch("http://127.0.0.1:3000/api/health");
+const url = process.env.HEALTHCHECK_URL ?? "http://127.0.0.1/api/health";
+const response = await fetch(url);
 if (!response.ok) {
-  console.error(`[healthcheck] failed with ${response.status}`);
+  console.error(`[healthcheck] failed for ${url} with ${response.status}`);
   process.exit(1);
 }
 

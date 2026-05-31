@@ -1,17 +1,21 @@
 import type { MetadataRoute } from "next";
 import { locales } from "@modeltruth/i18n";
-
-const baseUrl = "https://modeltruth.ai";
+import { absoluteUrl, isIndexablePath, languageAlternates, localizedPath, publicPaths } from "@modeltruth/seo";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const routes = ["", "/playground", "/providers/openai", "/methodology", "/pricing"];
+  const now = new Date();
+
   return locales.flatMap((locale) =>
-    routes.map((route) => ({
-      url: `${baseUrl}/${locale}${route}`,
-      lastModified: new Date(),
-      alternates: {
-        languages: Object.fromEntries(locales.map((item) => [item, `${baseUrl}/${item}${route}`]))
-      }
-    }))
+    publicPaths
+      .filter((path) => isIndexablePath(locale, path))
+      .map((path) => ({
+        url: absoluteUrl(localizedPath(locale, path)),
+        lastModified: now,
+        changeFrequency: path.includes("/evidence") ? "hourly" : "weekly",
+        priority: path === "" ? 1 : path.startsWith("/providers") ? 0.9 : 0.7,
+        alternates: {
+          languages: languageAlternates(path)
+        }
+      }))
   );
 }

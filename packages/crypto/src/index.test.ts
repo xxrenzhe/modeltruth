@@ -13,4 +13,18 @@ describe("crypto helpers", () => {
     expect(getSecretSuffix("sk-test-redaction-123456")).toBe("3456");
     expect(JSON.stringify(redactSecrets({ apiKey: "sk-test-redaction-123456" }))).not.toContain("sk-test-redaction");
   });
+
+  it("keeps public token usage counters while redacting authentication tokens", () => {
+    expect(
+      redactSecrets({
+        usage: { promptTokens: 10, completionTokens: 3, totalTokens: 13, reasoningTokens: 1 },
+        authToken: "session-token-123",
+        botToken: "telegram-token-123"
+      })
+    ).toEqual({
+      usage: { promptTokens: 10, completionTokens: 3, totalTokens: 13, reasoningTokens: 1 },
+      authToken: "[REDACTED]",
+      botToken: "[REDACTED]"
+    });
+  });
 });

@@ -2,6 +2,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+import { createInterface } from "node:readline/promises";
+import { stdin as input, stdout as output } from "node:process";
 import { runSmokeAudit } from "@modeltruth/audit-engine";
 import { redactSecrets } from "@modeltruth/crypto";
 
@@ -11,12 +13,22 @@ export interface CliCommandResult {
   stderr: string;
 }
 
+export type ApiKeyReader = () => Promise<string>;
+
 export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.env): Promise<CliCommandResult> {
+  return runCliWithOptions(argv, { env });
+}
+
+export async function runCliWithOptions(
+  argv: string[],
+  options: { env?: NodeJS.ProcessEnv; apiKeyReader?: ApiKeyReader } = {}
+): Promise<CliCommandResult> {
+  const env = options.env ?? process.env;
   const [command, ...args] = argv;
   const flags = parseFlags(args);
 
   try {
-    if (command === "audit") return await auditCommand(flags, env);
+    if (command === "audit") return await auditCommand(flags, env, options.apiKeyReader);
     if (command === "login") return await loginCommand(flags, env);
     if (command === "upload") return await uploadCommand(flags, env);
     return { exitCode: 1, stdout: usage(), stderr: command ? `Unknown command: ${command}` : "Missing command" };
@@ -25,9 +37,12 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
   }
 }
 
-async function auditCommand(flags: Record<string, string | boolean>, env: NodeJS.ProcessEnv): Promise<CliCommandResult> {
-  const apiKey = stringFlag(flags, "api-key") ?? env.MODELTRUTH_API_KEY ?? env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("API key required via --api-key, MODELTRUTH_API_KEY or OPENAI_API_KEY");
+async function auditCommand(
+  flags: Record<string, string | boolean>,
+  env: NodeJS.ProcessEnv,
+  apiKeyReader: ApiKeyReader = readApiKeyInteractively
+): Promise<CliCommandResult> {
+  const apiKey = await resolveApiKey(flags, env, apiKeyReader);
   const suiteId = stringFlag(flags, "suite") ?? "smoke@1.0.0";
   const result = await runSmokeAudit({
     baseUrl: requiredFlag(flags, "base-url"),
@@ -43,7 +58,46 @@ async function auditCommand(flags: Record<string, string | boolean>, env: NodeJS
   });
   const output = stringFlag(flags, "output") ?? "modeltruth-report.json";
   writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`);
-  return { exitCode: 0, stdout: JSON.stringify({ reportPath: output, runId: result.runId, status: result.overallStatus }), stderr: "" };
+  if (String(flags["consent-upload"]) === "true") {
+    const upload = await uploadReport(report, flags, env);
+    return {
+      exitCode: 0,
+      stdout: JSON.stringify({
+        reportPath: output,
+        runId: result.runId,
+        status: result.overallStatus,
+        uploaded: true,
+        upload
+      }),
+      stderr: ""
+    };
+  }
+  return {
+    exitCode: 0,
+    stdout: JSON.stringify({ reportPath: output, runId: result.runId, status: result.overallStatus, uploaded: false }),
+    stderr: ""
+  };
+}
+
+async function resolveApiKey(
+  flags: Record<string, string | boolean>,
+  env: NodeJS.ProcessEnv,
+  apiKeyReader: ApiKeyReader
+) {
+  const configured = stringFlag(flags, "api-key") ?? env.MODELTRUTH_API_KEY ?? env.OPENAI_API_KEY;
+  if (configured) return configured;
+  const value = await apiKeyReader();
+  if (!value.trim()) throw new Error("API key required via --api-key, MODELTRUTH_API_KEY, OPENAI_API_KEY or interactive input");
+  return value.trim();
+}
+
+async function readApiKeyInteractively() {
+  const terminal = createInterface({ input, output });
+  try {
+    return await terminal.question("ModelTruth API key: ");
+  } finally {
+    terminal.close();
+  }
 }
 
 async function loginCommand(flags: Record<string, string | boolean>, env: NodeJS.ProcessEnv): Promise<CliCommandResult> {
@@ -66,18 +120,26 @@ async function uploadCommand(flags: Record<string, string | boolean>, env: NodeJ
   if (String(flags.consent) !== "true") throw new Error("upload requires --consent true");
   const reportPath = requiredFlag(flags, "run");
   const report = JSON.parse(readFileSync(reportPath, "utf8"));
+  const body = await uploadReport(report, flags, env);
+  return { exitCode: 0, stdout: JSON.stringify(body), stderr: "" };
+}
+
+async function uploadReport(report: Record<string, unknown>, flags: Record<string, string | boolean>, env: NodeJS.ProcessEnv) {
   const config = readCliConfig();
   const apiBase = apiBaseUrl(flags, env, config.apiBase);
+  const result = typeof report.result === "object" && report.result ? (report.result as Record<string, unknown>) : {};
   const payload = redactSecrets({
     consent: true,
     schemaVersion: report.schemaVersion,
     generatedAt: report.generatedAt,
-    runId: report.result?.runId,
-    status: report.result?.overallStatus,
-    confidence: report.result?.confidence,
-    metrics: report.result?.metrics,
-    assertions: report.result?.assertions,
-    evidenceSummary: report.result?.evidenceSummary
+    runId: result.runId,
+    status: result.overallStatus,
+    confidence: result.confidence,
+    suiteId: report.suiteId,
+    model: result.model,
+    metrics: result.metrics,
+    assertions: result.assertions,
+    evidenceSummary: result.evidenceSummary
   });
   const response = await fetch(`${apiBase}/api/cli/upload`, {
     method: "POST",
@@ -89,7 +151,7 @@ async function uploadCommand(flags: Record<string, string | boolean>, env: NodeJ
   });
   const body = await response.text();
   if (!response.ok) throw new Error(`Upload failed with ${response.status}: ${body}`);
-  return { exitCode: 0, stdout: body, stderr: "" };
+  return parseJsonOrText(body);
 }
 
 function parseFlags(args: string[]): Record<string, string | boolean> {
@@ -151,9 +213,18 @@ function readCliConfig(): { apiBase?: string; sessionToken?: string } {
   }
 }
 
+function parseJsonOrText(body: string): unknown {
+  try {
+    return JSON.parse(body);
+  } catch {
+    return { response: body };
+  }
+}
+
 function usage() {
   return [
     "modeltruth audit --base-url https://api.example.com/v1 --model gpt-5.1 --suite smoke@1.0.0",
+    "modeltruth audit --base-url https://api.example.com/v1 --model gpt-5.1 --consent-upload true",
     "modeltruth login --email you@example.com --api-base http://localhost:3000",
     "modeltruth upload --run ./modeltruth-report.json --consent true"
   ].join("\n");

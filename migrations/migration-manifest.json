@@ -1,0 +1,293 @@
+{
+  "schemaVersion": "modeltruth.migration-manifest.v1",
+  "migrations": [
+    {
+      "number": "000",
+      "name": "init_schema_consolidated",
+      "sqliteMigration": "000_init_schema_consolidated.sql",
+      "postgresMigration": "000_init_schema_consolidated.pg.sql",
+      "impactQueries": [
+        "Core repositories for users, workspaces, provider_nodes, jobs, audit_runs, alert_channels and migration_history."
+      ],
+      "rollback": {
+        "sqlite": "Initial schema is forward-only. Roll back a failed first deployment by replacing the empty local database before any user traffic.",
+        "postgres": "Initial schema is forward-only. Roll back a failed first deployment by dropping the newly created empty target database before any user traffic."
+      },
+      "validationSql": {
+        "sqlite": "select name from sqlite_master where type='table' and name in ('users','workspaces','provider_nodes','jobs','audit_runs','alert_channels','migration_history');",
+        "postgres": "select table_name from information_schema.tables where table_schema='public' and table_name in ('users','workspaces','provider_nodes','jobs','audit_runs','alert_channels','migration_history');"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    },
+    {
+      "number": "001",
+      "name": "hot_path_indexes",
+      "sqliteMigration": "001_hot_path_indexes.sql",
+      "postgresMigration": "001_hot_path_indexes.pg.sql",
+      "impactQueries": [
+        "Job polling by status/run_after, workspace node listing by workspace/status and audit history by node/created_at."
+      ],
+      "rollback": {
+        "sqlite": "Append a forward migration dropping idx_jobs_status_run_after, idx_provider_nodes_workspace_status and idx_audit_runs_node_created if required.",
+        "postgres": "Append a forward migration dropping idx_jobs_status_run_after, idx_provider_nodes_workspace_status and idx_audit_runs_node_created if required."
+      },
+      "validationSql": {
+        "sqlite": "select name from sqlite_master where type='index' and name in ('idx_jobs_status_run_after','idx_provider_nodes_workspace_status','idx_audit_runs_node_created');",
+        "postgres": "select indexname from pg_indexes where schemaname='public' and indexname in ('idx_jobs_status_run_after','idx_provider_nodes_workspace_status','idx_audit_runs_node_created');"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    },
+    {
+      "number": "002",
+      "name": "auth_sessions",
+      "sqliteMigration": "002_auth_sessions.sql",
+      "postgresMigration": "002_auth_sessions.pg.sql",
+      "impactQueries": [
+        "Magic-link login, session lookup by token hash and session expiry cleanup by user/expires_at."
+      ],
+      "rollback": {
+        "sqlite": "Append a forward migration disabling auth routes and dropping auth_magic_links/auth_sessions only before public launch.",
+        "postgres": "Append a forward migration disabling auth routes and dropping auth_magic_links/auth_sessions only before public launch."
+      },
+      "validationSql": {
+        "sqlite": "select name from sqlite_master where type='table' and name in ('auth_magic_links','auth_sessions');",
+        "postgres": "select table_name from information_schema.tables where table_schema='public' and table_name in ('auth_magic_links','auth_sessions');"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    },
+    {
+      "number": "003",
+      "name": "stripe_events",
+      "sqliteMigration": "003_stripe_events.sql",
+      "postgresMigration": "003_stripe_events.pg.sql",
+      "impactQueries": [
+        "Stripe webhook idempotency by event id and workspace billing lookup by Stripe customer/subscription."
+      ],
+      "rollback": {
+        "sqlite": "Append a forward migration disabling billing webhooks and dropping stripe_events/indexes only before paid launch.",
+        "postgres": "Append a forward migration disabling billing webhooks and dropping stripe_events/indexes only before paid launch."
+      },
+      "validationSql": {
+        "sqlite": "select name from sqlite_master where type='table' and name='stripe_events';",
+        "postgres": "select table_name from information_schema.tables where table_schema='public' and table_name='stripe_events';"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    },
+    {
+      "number": "004",
+      "name": "alert_target_suffix",
+      "sqliteMigration": "004_alert_target_suffix.sql",
+      "postgresMigration": "004_alert_target_suffix.pg.sql",
+      "impactQueries": [
+        "Alert channel list responses expose only redacted target suffixes."
+      ],
+      "rollback": {
+        "sqlite": "Append a forward migration rebuilding alert_channels without target_suffix if the field must be removed.",
+        "postgres": "Append a forward migration dropping alert_channels.target_suffix if the field must be removed."
+      },
+      "validationSql": {
+        "sqlite": "select name from pragma_table_info('alert_channels') where name='target_suffix';",
+        "postgres": "select column_name from information_schema.columns where table_schema='public' and table_name='alert_channels' and column_name='target_suffix';"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    },
+    {
+      "number": "005",
+      "name": "public_audit_provider_slug",
+      "sqliteMigration": "005_public_audit_provider_slug.sql",
+      "postgresMigration": "005_public_audit_provider_slug.pg.sql",
+      "impactQueries": [
+        "Public dashboard and Provider Truth Board aggregate audit_runs by provider_slug and created_at."
+      ],
+      "rollback": {
+        "sqlite": "Append a forward migration rebuilding audit_runs without provider_slug and its index if public provider aggregation is removed.",
+        "postgres": "Append a forward migration dropping idx_audit_runs_provider_created and audit_runs.provider_slug if public provider aggregation is removed."
+      },
+      "validationSql": {
+        "sqlite": "select name from pragma_table_info('audit_runs') where name='provider_slug';",
+        "postgres": "select column_name from information_schema.columns where table_schema='public' and table_name='audit_runs' and column_name='provider_slug';"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    },
+    {
+      "number": "006",
+      "name": "provider_disputes",
+      "sqliteMigration": "006_provider_disputes.sql",
+      "postgresMigration": "006_provider_disputes.pg.sql",
+      "impactQueries": [
+        "Dispute policy intake, provider dispute list and public provider response status by provider/status."
+      ],
+      "rollback": {
+        "sqlite": "Append a forward migration disabling dispute API/page and dropping provider_disputes before public launch if required.",
+        "postgres": "Append a forward migration disabling dispute API/page and dropping provider_disputes before public launch if required."
+      },
+      "validationSql": {
+        "sqlite": "select name from sqlite_master where type='table' and name='provider_disputes';",
+        "postgres": "select table_name from information_schema.tables where table_schema='public' and table_name='provider_disputes';"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    },
+    {
+      "number": "007",
+      "name": "provider_node_deletion",
+      "sqliteMigration": "007_provider_node_deletion.sql",
+      "postgresMigration": "007_provider_node_deletion.pg.sql",
+      "impactQueries": [
+        "Provider node soft-delete, scheduler active-node scans and audit key lookup excluding deleted nodes."
+      ],
+      "rollback": {
+        "sqlite": "Append a forward migration rebuilding provider_nodes without deleted_at only if soft-delete semantics are replaced.",
+        "postgres": "Append a forward migration dropping idx_provider_nodes_status_deleted and provider_nodes.deleted_at only if soft-delete semantics are replaced."
+      },
+      "validationSql": {
+        "sqlite": "select name from pragma_table_info('provider_nodes') where name='deleted_at';",
+        "postgres": "select column_name from information_schema.columns where table_schema='public' and table_name='provider_nodes' and column_name='deleted_at';"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    },
+    {
+      "number": "008",
+      "name": "playground_quota_events",
+      "sqliteMigration": "008_playground_quota_events.sql",
+      "postgresMigration": "008_playground_quota_events.pg.sql",
+      "impactQueries": [
+        "Free Playground quota checks by hashed quota_key and created_at."
+      ],
+      "rollback": {
+        "sqlite": "Append a forward migration disabling DB-backed quota and dropping playground_quota_events before public launch if required.",
+        "postgres": "Append a forward migration disabling DB-backed quota and dropping playground_quota_events before public launch if required."
+      },
+      "validationSql": {
+        "sqlite": "select name from sqlite_master where type='table' and name='playground_quota_events';",
+        "postgres": "select table_name from information_schema.tables where table_schema='public' and table_name='playground_quota_events';"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    },
+    {
+      "number": "009",
+      "name": "model_registry_calibration",
+      "sqliteMigration": "009_model_registry_calibration.sql",
+      "postgresMigration": "009_model_registry_calibration.pg.sql",
+      "impactQueries": [
+        "Model capability lookup, weekly calibration scheduling and calibration history by provider/model/suite."
+      ],
+      "rollback": {
+        "sqlite": "Append a forward migration disabling calibration jobs and dropping model_calibrations/model_registry before public launch if required.",
+        "postgres": "Append a forward migration disabling calibration jobs and dropping model_calibrations/model_registry before public launch if required."
+      },
+      "validationSql": {
+        "sqlite": "select name from sqlite_master where type='table' and name in ('model_registry','model_calibrations');",
+        "postgres": "select table_name from information_schema.tables where table_schema='public' and table_name in ('model_registry','model_calibrations');"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    },
+    {
+      "number": "010",
+      "name": "audit_trace_semantics",
+      "sqliteMigration": "010_audit_trace_semantics.sql",
+      "postgresMigration": "010_audit_trace_semantics.pg.sql",
+      "impactQueries": [
+        "Evidence export and structured logs correlate audit_runs by trace_id."
+      ],
+      "rollback": {
+        "sqlite": "Append a forward migration rebuilding audit_runs without trace_id only if trace correlation is replaced.",
+        "postgres": "Append a forward migration dropping idx_audit_runs_trace_id and audit_runs.trace_id only if trace correlation is replaced."
+      },
+      "validationSql": {
+        "sqlite": "select name from pragma_table_info('audit_runs') where name='trace_id';",
+        "postgres": "select column_name from information_schema.columns where table_schema='public' and table_name='audit_runs' and column_name='trace_id';"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    },
+    {
+      "number": "011",
+      "name": "provider_dispute_review_sla",
+      "sqliteMigration": "011_provider_dispute_review_sla.sql",
+      "postgresMigration": "011_provider_dispute_review_sla.pg.sql",
+      "impactQueries": [
+        "Dispute review worker queues and provider dispute SLA listing by status/review_due_at."
+      ],
+      "rollback": {
+        "sqlite": "Append a forward migration rebuilding provider_disputes without review_due_at/review_started_at if SLA workflow is removed.",
+        "postgres": "Append a forward migration dropping idx_provider_disputes_review_due and the review SLA columns if SLA workflow is removed."
+      },
+      "validationSql": {
+        "sqlite": "select name from pragma_table_info('provider_disputes') where name in ('review_due_at','review_started_at');",
+        "postgres": "select column_name from information_schema.columns where table_schema='public' and table_name='provider_disputes' and column_name in ('review_due_at','review_started_at');"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    },
+    {
+      "number": "012",
+      "name": "workspace_members",
+      "sqliteMigration": "012_workspace_members.sql",
+      "postgresMigration": "012_workspace_members.pg.sql",
+      "impactQueries": [
+        "Team member authorization, invitation listing and owner backfill by workspace/email."
+      ],
+      "rollback": {
+        "sqlite": "Append a forward migration disabling team-member APIs and dropping workspace_members before Team launch if required.",
+        "postgres": "Append a forward migration disabling team-member APIs and dropping workspace_members before Team launch if required."
+      },
+      "validationSql": {
+        "sqlite": "select name from sqlite_master where type='table' and name='workspace_members';",
+        "postgres": "select table_name from information_schema.tables where table_schema='public' and table_name='workspace_members';"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    },
+    {
+      "number": "013",
+      "name": "workspace_privacy_settings",
+      "sqliteMigration": "013_workspace_privacy_settings.sql",
+      "postgresMigration": "013_workspace_privacy_settings.pg.sql",
+      "impactQueries": [
+        "Workspace privacy setting reads before evidence persistence and privacy settings export/delete APIs."
+      ],
+      "rollback": {
+        "sqlite": "Append a forward migration disabling save_full_responses UI/API and dropping workspace_privacy_settings if required.",
+        "postgres": "Append a forward migration disabling save_full_responses UI/API and dropping workspace_privacy_settings if required."
+      },
+      "validationSql": {
+        "sqlite": "select name from sqlite_master where type='table' and name='workspace_privacy_settings';",
+        "postgres": "select table_name from information_schema.tables where table_schema='public' and table_name='workspace_privacy_settings';"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    },
+    {
+      "number": "014",
+      "name": "byo_probes",
+      "sqliteMigration": "014_byo_probes.sql",
+      "postgresMigration": "014_byo_probes.pg.sql",
+      "impactQueries": [
+        "BYO probe registration/listing by workspace/status and heartbeat authentication by token_hash."
+      ],
+      "rollback": {
+        "sqlite": "Append a forward migration disabling BYO probe APIs and dropping byo_probes before BYO Probe launch if required.",
+        "postgres": "Append a forward migration disabling BYO probe APIs and dropping byo_probes before BYO Probe launch if required."
+      },
+      "validationSql": {
+        "sqlite": "select name from sqlite_master where type='table' and name='byo_probes';",
+        "postgres": "select table_name from information_schema.tables where table_schema='public' and table_name='byo_probes';"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    },
+    {
+      "number": "015",
+      "name": "provider_dispute_request_type",
+      "sqliteMigration": "015_provider_dispute_request_type.sql",
+      "postgresMigration": "015_provider_dispute_request_type.pg.sql",
+      "impactQueries": [
+        "Dispute review queues and Provider Truth Board status by provider/request_type/status."
+      ],
+      "rollback": {
+        "sqlite": "Append a forward migration rebuilding provider_disputes without request_type if request type workflow is removed.",
+        "postgres": "Append a forward migration dropping idx_provider_disputes_request_type and provider_disputes.request_type if request type workflow is removed."
+      },
+      "validationSql": {
+        "sqlite": "select name from pragma_table_info('provider_disputes') where name='request_type';",
+        "postgres": "select column_name from information_schema.columns where table_schema='public' and table_name='provider_disputes' and column_name='request_type';"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    }
+  ]
+}

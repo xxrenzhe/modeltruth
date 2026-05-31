@@ -22,6 +22,7 @@ interface AuditRunListItem {
 export function EvidenceClient({ labels }: { labels: EvidenceLabels }) {
   const [runs, setRuns] = useState<AuditRunListItem[]>([]);
   const [error, setError] = useState("");
+  const currentMonth = new Date().toISOString().slice(0, 7);
 
   useEffect(() => {
     fetch("/api/evidence")
@@ -34,6 +35,17 @@ export function EvidenceClient({ labels }: { labels: EvidenceLabels }) {
   }, []);
 
   const riskFlags = runs.filter((run) => ["warning", "fail", "error"].includes(run.status));
+
+  async function deleteRun(runId: string) {
+    setError("");
+    const response = await fetch(`/api/evidence/${runId}`, { method: "DELETE" });
+    const payload = await response.json();
+    if (!response.ok) {
+      setError(payload.error ?? "Unable to delete evidence");
+      return;
+    }
+    setRuns((current) => current.filter((run) => run.runId !== runId));
+  }
 
   return (
     <section className="workspaceGrid">
@@ -49,11 +61,21 @@ export function EvidenceClient({ labels }: { labels: EvidenceLabels }) {
               <a className="button secondary" href={`/api/evidence/${run.runId}`}>
                 {labels.download}
               </a>
+              <button className="button secondary" type="button" onClick={() => void deleteRun(run.runId)}>
+                Delete evidence
+              </button>
             </article>
           ))}
         </div>
       </div>
       <div className="card formGrid">
+        <div>
+          <div className="eyebrow">Monthly report</div>
+          <p className="lede">Pro and Team workspaces can export a monthly audit report for billing and vendor reviews.</p>
+          <a className="button primary" href={`/api/reports/monthly?month=${currentMonth}`}>
+            Export {currentMonth} report
+          </a>
+        </div>
         {error ? <p className="notice error">{error}</p> : null}
         {runs.length === 0 && !error ? <p className="lede">{labels.empty}</p> : null}
         <div className="statusList">

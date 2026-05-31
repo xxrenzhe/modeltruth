@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { encryptSecret, getSecretSuffix } from "@modeltruth/crypto";
+import { decryptSecret, encryptSecret, getSecretSuffix } from "@modeltruth/crypto";
 import { ensureSqliteReady } from "./index";
 import { createAuthRepository } from "./auth";
 import { createProviderNodeRepository } from "./provider-nodes";
@@ -35,6 +35,10 @@ describe("ProviderNodeRepository", () => {
     const dueNodes = await repo.listDueForSchedule(new Date());
     await repo.markScheduled(node.id, "heartbeat", new Date(Date.now() + 60_000));
     const dueAfterHeartbeat = await repo.listDueForSchedule(new Date());
+    const deleted = await repo.delete(sessionResult!.session.workspace.id, node.id);
+    const nodesAfterDelete = await repo.list(sessionResult!.session.workspace.id);
+    const secretAfterDelete = await repo.getForAudit(node.id);
+    const dueAfterDelete = await repo.listDueForSchedule(new Date());
     await repo.close();
     if (previousPath === undefined) delete process.env.DATABASE_PATH;
     else process.env.DATABASE_PATH = previousPath;
@@ -46,5 +50,50 @@ describe("ProviderNodeRepository", () => {
     expect(dueNodes.map((item) => item.id)).toContain(node.id);
     expect(dueAfterHeartbeat.map((item) => item.id)).toContain(node.id);
     expect(nodes).toHaveLength(1);
+    expect(deleted).toBe(true);
+    expect(nodesAfterDelete).toHaveLength(0);
+    expect(secretAfterDelete?.encryptedApiKey).toBeUndefined();
+    expect(dueAfterDelete.map((item) => item.id)).not.toContain(node.id);
+  });
+
+  it("supports dry-run/apply API key ciphertext rotation without exposing plaintext", async () => {
+    const cwd = process.cwd();
+    const dir = mkdtempSync(path.join(tmpdir(), "modeltruth-node-rotation-"));
+    const previousPath = process.env.DATABASE_PATH;
+    process.env.DATABASE_PATH = path.join(dir, "modeltruth.sqlite");
+    await ensureSqliteReady({ cwd, databasePath: process.env.DATABASE_PATH });
+
+    const authRepo = await createAuthRepository();
+    const link = await authRepo.createMagicLink("rotation-owner@example.com");
+    const sessionResult = await authRepo.consumeMagicLink(link.token);
+    await authRepo.close();
+
+    const repo = await createProviderNodeRepository();
+    const node = await repo.create({
+      workspaceId: sessionResult!.session.workspace.id,
+      name: "Rotation target",
+      baseUrl: "https://api.example.com/v1",
+      baseUrlHostHash: "host_hash",
+      modelId: "gpt-5.1",
+      encryptedApiKey: encryptSecret("sk-rotate-node-123456", "old-key"),
+      apiKeySuffix: getSecretSuffix("sk-rotate-node-123456")
+    });
+    const rotationRows = await repo.listKeysForRotation();
+    const dryRunDecrypts = decryptSecret(rotationRows[0].encryptedApiKey, "old-key");
+    const dryRunStillOld = await repo.getForAudit(node.id);
+    const updated = await repo.updateEncryptedApiKey(node.id, encryptSecret(dryRunDecrypts, "new-key"));
+    const rotated = await repo.getForAudit(node.id);
+    await repo.close();
+
+    if (previousPath === undefined) delete process.env.DATABASE_PATH;
+    else process.env.DATABASE_PATH = previousPath;
+    rmSync(dir, { recursive: true, force: true });
+
+    expect(rotationRows).toHaveLength(1);
+    expect(JSON.stringify(rotationRows)).not.toContain("sk-rotate-node");
+    expect(decryptSecret(dryRunStillOld!.encryptedApiKey!, "old-key")).toBe("sk-rotate-node-123456");
+    expect(updated).toBe(true);
+    expect(() => decryptSecret(rotated!.encryptedApiKey!, "old-key")).toThrow();
+    expect(decryptSecret(rotated!.encryptedApiKey!, "new-key")).toBe("sk-rotate-node-123456");
   });
 });

@@ -155,9 +155,49 @@ h1 {
   letter-spacing: -0.04em;
 }
 
+.legalPage {
+  display: grid;
+  gap: 24px;
+}
+
+.legalPage h2 {
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+  letter-spacing: -0.04em;
+  margin: 0 0 10px;
+}
+
+.legalPage p,
+.legalPage li {
+  color: var(--muted);
+  font-size: 1.04rem;
+  line-height: 1.55;
+}
+
+.legalGrid {
+  grid-template-columns: repeat(2, 1fr);
+  margin-top: 18px;
+}
+
 .formGrid {
   display: grid;
   gap: 14px;
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+}
+
+.checkboxRow input {
+  accent-color: var(--ink);
+  width: 18px;
+  height: 18px;
+}
+
+.muted {
+  color: var(--muted);
 }
 
 .twoColumn {
@@ -175,6 +215,18 @@ select {
   font: inherit;
   padding: 13px 14px;
   width: 100%;
+}
+
+.jsonPreview {
+  background: rgb(20 34 28 / 0.06);
+  border-radius: 12px;
+  color: var(--ink);
+  font-size: 0.82rem;
+  margin: 12px 0 0;
+  max-height: 360px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
 }
 
 label {

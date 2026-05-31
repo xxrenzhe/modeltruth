@@ -78,6 +78,7 @@ const dictionaries = {
     providers: [
       { slug: "openai", name: "OpenAI", status: "pass" },
       { slug: "anthropic", name: "Anthropic", status: "pass" },
+      { slug: "google-gemini", name: "Google Gemini", status: "pass" },
       { slug: "openrouter", name: "OpenRouter", status: "warning" }
     ]
   },
@@ -152,6 +153,7 @@ const dictionaries = {
     providers: [
       { slug: "openai", name: "OpenAI", status: "pass" },
       { slug: "anthropic", name: "Anthropic", status: "pass" },
+      { slug: "google-gemini", name: "Google Gemini", status: "pass" },
       { slug: "openrouter", name: "OpenRouter", status: "warning" }
     ]
   }
