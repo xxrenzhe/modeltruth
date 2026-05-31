@@ -10,6 +10,7 @@ This file tracks direct third-party dependencies used by ModelTruth. Internal wo
 | `postgres` | 3.4.9 | Unlicense | PostgreSQL client for production repositories and migrations |
 | `promptfoo` | 0.121.13 | MIT | Local eval/provider contract for audit suite runner and custom provider compatibility |
 | `zod` | 3.25.76 | MIT | Runtime validation for API and environment inputs |
+| `esbuild` | 0.28.0 | MIT | Bundles the publishable standalone ModelTruth CLI package |
 | `tsx` | 4.22.3 | MIT | TypeScript script runner for local tooling and startup scripts |
 | `typescript` | 5.9.3 | Apache-2.0 | Type checking and build-time tooling |
 | `vitest` | 3.2.4 | MIT | Unit and integration test runner |

@@ -59,9 +59,19 @@ describe("runPerformanceReleaseGovernance", () => {
     expect(result.issues).toContain("Release metrics missing playgroundSmokeP95Ms");
     expect(result.issues).toContain("Release metrics missing dashboardFreshnessSeconds");
   });
+
+  it("fails when the CLI package points the binary at TypeScript source", () => {
+    const cwd = mkBuildFixture({ cliBin: "./src/index.ts" });
+
+    const result = runPerformanceReleaseGovernance({ cwd });
+    rmSync(cwd, { recursive: true, force: true });
+
+    expect(result.ok).toBe(false);
+    expect(result.issues).toContain("CLI package must expose bundled dist/index.js as the modeltruth binary");
+  });
 });
 
-function mkBuildFixture(options: { omitRoute?: string } = {}) {
+function mkBuildFixture(options: { omitRoute?: string; cliBin?: string } = {}) {
   const cwd = path.join(tmpdir(), `modeltruth-release-gate-${crypto.randomUUID()}`);
   const nextDir = path.join(cwd, "apps", "web", ".next");
   const chunksDir = path.join(nextDir, "static", "chunks");
@@ -69,6 +79,7 @@ function mkBuildFixture(options: { omitRoute?: string } = {}) {
   writeFileSync(path.join(nextDir, "required-server-files.json"), "{}");
   writeFileSync(path.join(chunksDir, "tiny.js"), "1");
   mkdirSync(path.join(cwd, "apps", "cli"), { recursive: true });
+  mkdirSync(path.join(cwd, "apps", "cli", "dist"), { recursive: true });
   mkdirSync(path.join(cwd, "docs", "launch", "assets"), { recursive: true });
   mkdirSync(path.join(cwd, "docs", "launch", "blog"), { recursive: true });
   writeMetrics(path.join(cwd, "docs", "launch"), {
@@ -93,8 +104,16 @@ function mkBuildFixture(options: { omitRoute?: string } = {}) {
   );
   writeFileSync(
     path.join(cwd, "apps", "cli", "package.json"),
-    JSON.stringify({ name: "modeltruth-cli", private: false, bin: { modeltruth: "./src/index.ts" } })
+    JSON.stringify({
+      name: "modeltruth-cli",
+      version: "0.1.0",
+      license: "Apache-2.0",
+      private: false,
+      bin: { modeltruth: options.cliBin ?? "./dist/index.js" },
+      files: ["dist", "README.md"]
+    })
   );
+  writeFileSync(path.join(cwd, "apps", "cli", "dist", "index.js"), "#!/usr/bin/env node\nconsole.log('modeltruth');\n");
 
   const routePatterns = [
     "/[locale]/page",

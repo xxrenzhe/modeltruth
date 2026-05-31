@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
+import { pathToFileURL } from "node:url";
 import { runSmokeAudit } from "@modeltruth/audit-engine";
 import { redactSecrets } from "@modeltruth/crypto";
 
@@ -230,10 +231,14 @@ function usage() {
   ].join("\n");
 }
 
-if (process.argv[1]?.endsWith("apps/cli/src/index.ts")) {
+if (isCliEntrypoint()) {
   runCli(process.argv.slice(2)).then((result) => {
     if (result.stdout) console.log(result.stdout);
     if (result.stderr) console.error(result.stderr);
     process.exit(result.exitCode);
   });
+}
+
+function isCliEntrypoint() {
+  return process.argv[1] ? import.meta.url === pathToFileURL(process.argv[1]).href : false;
 }

@@ -6,12 +6,16 @@
   "private": false,
   "type": "module",
   "bin": {
-    "modeltruth": "./src/index.ts"
+    "modeltruth": "./dist/index.js"
   },
   "files": [
-    "src",
+    "dist",
     "README.md"
   ],
+  "scripts": {
+    "build": "tsx ../../scripts/build-cli.ts",
+    "prepack": "npm run build"
+  },
   "publishConfig": {
     "access": "public"
   }

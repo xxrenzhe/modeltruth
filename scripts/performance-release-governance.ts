@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { publicPaths } from "@modeltruth/seo";
@@ -175,7 +176,8 @@ function validateGtmMaterials(cwd: string) {
 }
 
 function validateCliGtmMaterials(cwd: string) {
-  const packageJsonPath = path.join(cwd, "apps", "cli", "package.json");
+  const cliDir = path.join(cwd, "apps", "cli");
+  const packageJsonPath = path.join(cliDir, "package.json");
   const readmePath = path.join(cwd, "apps", "cli", "README.md");
   const issues: string[] = [];
   if (!existsSync(packageJsonPath)) {
@@ -184,7 +186,8 @@ function validateCliGtmMaterials(cwd: string) {
     const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { name?: string; private?: boolean; bin?: Record<string, string> };
     if (packageJson.name !== "modeltruth-cli") issues.push("CLI package name must be modeltruth-cli");
     if (packageJson.private !== false) issues.push("CLI package must be publishable with private=false");
-    if (packageJson.bin?.modeltruth !== "./src/index.ts") issues.push("CLI package must expose the modeltruth binary");
+    if (packageJson.bin?.modeltruth !== "./dist/index.js") issues.push("CLI package must expose bundled dist/index.js as the modeltruth binary");
+    issues.push(...validateCliPackContents(cwd, cliDir));
   }
 
   if (!existsSync(readmePath)) return [...issues, "Missing apps/cli/README.md for CLI quickstart"];
@@ -203,6 +206,38 @@ function validateCliGtmMaterials(cwd: string) {
       .map((snippet) => `CLI README missing required GTM/privacy snippet: ${snippet}`)
   );
   return issues;
+}
+
+function validateCliPackContents(cwd: string, cliDir: string) {
+  const issues: string[] = [];
+  try {
+    const raw = execFileSync("npm", ["--silent", "pack", "--dry-run", "--json"], {
+      cwd: cliDir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    const [pack] = JSON.parse(raw) as Array<{ files?: Array<{ path: string; mode?: number }> }>;
+    const files = pack?.files ?? [];
+    const filePaths = new Set(files.map((file) => file.path));
+    if (!filePaths.has("dist/index.js")) issues.push("CLI npm package must include dist/index.js");
+    if (!filePaths.has("README.md")) issues.push("CLI npm package must include README.md");
+    if ([...filePaths].some((file) => file.startsWith("src/") || file.endsWith(".ts"))) {
+      issues.push("CLI npm package must not ship TypeScript source files");
+    }
+    const distPath = path.join(cliDir, "dist", "index.js");
+    if (!existsSync(distPath)) {
+      issues.push("CLI dist/index.js is missing; run npm -w modeltruth-cli run build before release governance");
+    } else {
+      const dist = readFileSync(distPath, "utf8");
+      if (!dist.startsWith("#!/usr/bin/env node")) issues.push("CLI dist/index.js must start with a node shebang");
+      if (dist.includes("@modeltruth/")) issues.push("CLI dist/index.js must bundle private @modeltruth workspace packages");
+    }
+  } catch (error) {
+    const stderr = error && typeof error === "object" && "stderr" in error ? String((error as { stderr?: unknown }).stderr ?? "") : "";
+    const message = `${error instanceof Error ? error.message : String(error)} ${stderr}`.trim();
+    issues.push(`CLI npm pack dry-run failed: ${message}`);
+  }
+  return issues.map((issue) => issue.replaceAll(cwd, "<repo>"));
 }
 
 function validateLaunchMaterials(cwd: string) {

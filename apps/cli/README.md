@@ -17,6 +17,8 @@ modeltruth audit \
 By default, the CLI runs locally and does not upload telemetry. The report stores redacted evidence only and never writes the API key.
 If `--api-key`, `MODELTRUTH_API_KEY` and `OPENAI_API_KEY` are absent, the CLI prompts for the key interactively for the current run only.
 
+The published npm package ships a bundled `dist/index.js` binary, so users do not need the ModelTruth monorepo or TypeScript tooling installed.
+
 ## Upload With Consent
 
 ```bash
