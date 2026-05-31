@@ -431,6 +431,8 @@ export type { ByoProbeRecord, ByoProbeRepository, ByoProbeStatus, RegisterByoPro
 export { createByoProbeRepository } from "./probes";
 export type { BillingRepository, UpdateWorkspaceBillingInput, WorkspaceBilling } from "./billing";
 export { createBillingRepository } from "./billing";
+export type { FairUseAction, WorkspaceFairUseStatus } from "./fair-use";
+export { getWorkspaceFairUseStatus } from "./fair-use";
 export type {
   AlertChannelRecord,
   AlertChannelRepository,

@@ -5,7 +5,8 @@ import {
   createProviderNodeRepository,
   createProviderSubscriptionRepository,
   getPublicAuditSummary,
-  ensureDatabaseReady
+  ensureDatabaseReady,
+  getWorkspaceFairUseStatus
 } from "@modeltruth/db";
 import { installGracefulShutdown, writeJsonLog } from "@modeltruth/shared";
 
@@ -37,6 +38,27 @@ export async function runSchedulerTick() {
         }
       }
       if (!node.nextDeepAuditAt || new Date(node.nextDeepAuditAt) <= now) {
+        const fairUse = await getWorkspaceFairUseStatus(node.workspaceId, now);
+        if (fairUse.action !== "allow") {
+          await nodes.markScheduled(
+            node.id,
+            "deepAudit",
+            new Date(now.getTime() + (fairUse.recommendedDeepAuditDelayMs ?? node.deepAuditIntervalSeconds * 1000))
+          );
+          await enqueueFairUseAlert(jobs, node.id, fairUse, now);
+          writeJsonLog({
+            service: "scheduler",
+            event: "fair_use.deep_audit_downshifted",
+            data: {
+              nodeId: node.id,
+              workspaceId: node.workspaceId,
+              action: fairUse.action,
+              currentMonthCostUsd: fairUse.currentMonthCostUsd,
+              budgetUsd: fairUse.budgetUsd
+            }
+          });
+          continue;
+        }
         const suiteId = deepAuditSuiteForWindow(node.id, now, node.deepAuditIntervalSeconds);
         const fingerprint = scheduleFingerprint(node.id, "deepAudit", now, node.deepAuditIntervalSeconds, suiteId);
         if (!(await jobs.hasActiveFingerprint("deepAudit", fingerprint))) {
@@ -60,6 +82,32 @@ export async function runSchedulerTick() {
     await nodes.close();
     await jobs.close();
   }
+}
+
+async function enqueueFairUseAlert(
+  jobs: Awaited<ReturnType<typeof createJobRepository>>,
+  nodeId: string,
+  fairUse: Awaited<ReturnType<typeof getWorkspaceFairUseStatus>>,
+  now: Date
+) {
+  const fingerprint = `fairUse:${fairUse.workspaceId}:${fairUse.tier}:${now.getUTCFullYear()}-${now.getUTCMonth() + 1}`;
+  if (await jobs.hasRecentFingerprint("alert", fingerprint, new Date(now.getTime() - 24 * 60 * 60 * 1000))) return;
+  await jobs.enqueue({
+    type: "alert",
+    payload: {
+      workspaceId: fairUse.workspaceId,
+      nodeId,
+      fingerprint,
+      status: "warning",
+      rule: "fair_use_budget",
+      message:
+        fairUse.action === "upgrade_prompt"
+          ? "Audit cost exceeded the free plan budget. Upgrade to keep deep audits running."
+          : "Audit cost exceeded 40% of plan revenue. Deep audits were downshifted for fair use.",
+      fairUse,
+      createdAt: now.toISOString()
+    }
+  });
 }
 
 async function enqueueProviderDigests(jobs: Awaited<ReturnType<typeof createJobRepository>>, now: Date) {

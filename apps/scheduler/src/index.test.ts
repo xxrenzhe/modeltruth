@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   createAuthRepository,
+  createBillingRepository,
   createJobRepository,
   createModelRegistryRepository,
   createProviderNodeRepository,
@@ -104,6 +105,76 @@ describe("runSchedulerTick calibration scheduling", () => {
       expect(deepAuditPayload.fingerprint).toContain(`:${deepAuditPayload.nodeId}:`);
       expect(deepAuditPayload.fingerprint.endsWith(`:${deepAuditPayload.suiteId}`)).toBe(true);
     } finally {
+      await jobs.close();
+      harness.cleanup();
+    }
+  });
+
+  it("downshifts deep audits and alerts when workspace fair-use budget is exceeded", async () => {
+    const harness = await createHarness("modeltruth-scheduler-fair-use-");
+    const auth = await createAuthRepository();
+    const link = await auth.createMagicLink("scheduler-fair-use@example.com");
+    const session = await auth.consumeMagicLink(link.token);
+    await auth.close();
+    const billing = await createBillingRepository();
+    try {
+      await billing.updateWorkspaceBilling({ workspaceId: session!.session.workspace.id, subscriptionStatus: "active", tier: "pro" });
+    } finally {
+      await billing.close();
+    }
+    await saveAuditRun({
+      id: "run_fair_use_cost",
+      workspaceId: session!.session.workspace.id,
+      suiteId: "reasoning-lite",
+      suiteVersion: "1.0.0",
+      runType: "deepAudit",
+      targetModelId: "gpt-5.1",
+      status: "pass",
+      confidence: 0.9,
+      metrics: { costEstimate: { totalCostUsd: 8, currency: "USD" } },
+      assertions: [{ id: "COST_TRACKED", status: "pass" }],
+      evidenceSummary: { requestBodyStored: false }
+    });
+    const nodes = await createProviderNodeRepository();
+    let nodeId = "";
+    try {
+      const node = await nodes.create({
+        workspaceId: session!.session.workspace.id,
+        name: "Costly node",
+        baseUrl: "https://api.example.com/v1",
+        baseUrlHostHash: "host_hash",
+        modelId: "gpt-5.1",
+        encryptedApiKey: "encrypted",
+        apiKeySuffix: "test",
+        heartbeatIntervalSeconds: 60,
+        deepAuditIntervalSeconds: 3600
+      });
+      nodeId = node.id;
+      await nodes.markScheduled(nodeId, "heartbeat", new Date(Date.now() + 60_000));
+      await nodes.markScheduled(nodeId, "deepAudit", new Date(Date.now() - 60_000));
+    } finally {
+      await nodes.close();
+    }
+
+    await runSchedulerTick();
+
+    const jobs = await createJobRepository();
+    const refreshedNodes = await createProviderNodeRepository();
+    try {
+      const deepAudit = await jobs.claimNext({ workerId: "test-scheduler", types: ["deepAudit"] });
+      const alert = await jobs.claimNext({ workerId: "test-scheduler", types: ["alert"] });
+      const node = (await refreshedNodes.list(session!.session.workspace.id)).find((item) => item.id === nodeId);
+      const payload = JSON.parse(alert?.payloadJson ?? "{}");
+      expect(deepAudit).toBeUndefined();
+      expect(alert?.type).toBe("alert");
+      expect(payload).toMatchObject({
+        rule: "fair_use_budget",
+        status: "warning",
+        fairUse: { action: "downshift", currentMonthCostUsd: 8, budgetUsd: 7.6 }
+      });
+      expect(new Date(node!.nextDeepAuditAt!).getTime()).toBeGreaterThan(Date.now() + 23 * 60 * 60 * 1000);
+    } finally {
+      await refreshedNodes.close();
       await jobs.close();
       harness.cleanup();
     }
