@@ -9,6 +9,7 @@ interface WorkspaceLabels {
   apiKey: string;
   heartbeat: string;
   deepAudit: string;
+  ttftAlert: string;
   create: string;
   empty: string;
   loginRequired: string;
@@ -29,6 +30,7 @@ interface ProviderNode {
   status: string;
   heartbeatIntervalSeconds: number;
   deepAuditIntervalSeconds: number;
+  ttftThresholdMs: number;
   nextHeartbeatAt?: string;
   nextDeepAuditAt?: string;
   createdAt: string;
@@ -117,7 +119,8 @@ export function WorkspaceClient({ labels }: { labels: WorkspaceLabels }) {
           modelId: formData.get("modelId"),
           apiKey: formData.get("apiKey"),
           heartbeatIntervalSeconds: Number(formData.get("heartbeatIntervalSeconds") ?? 300),
-          deepAuditIntervalSeconds: Number(formData.get("deepAuditIntervalSeconds") ?? 43200)
+          deepAuditIntervalSeconds: Number(formData.get("deepAuditIntervalSeconds") ?? 43200),
+          ttftThresholdMs: Number(formData.get("ttftThresholdMs") ?? 3000)
         })
       });
       const payload = await response.json();
@@ -268,6 +271,10 @@ export function WorkspaceClient({ labels }: { labels: WorkspaceLabels }) {
               <input defaultValue="43200" min="3600" name="deepAuditIntervalSeconds" type="number" />
             </label>
           </div>
+          <label>
+            {labels.ttftAlert}
+            <input defaultValue="3000" min="100" name="ttftThresholdMs" type="number" />
+          </label>
           <button className="button" disabled={pending} type="submit">
             {pending ? "..." : labels.create}
           </button>
@@ -401,6 +408,10 @@ export function WorkspaceClient({ labels }: { labels: WorkspaceLabels }) {
                 <div>
                   <dt>Deep audit</dt>
                   <dd>{node.deepAuditIntervalSeconds}s</dd>
+                </div>
+                <div>
+                  <dt>TTFT alert</dt>
+                  <dd>{node.ttftThresholdMs}ms</dd>
                 </div>
               </dl>
             </article>

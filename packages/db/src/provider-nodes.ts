@@ -12,6 +12,7 @@ export interface ProviderNodeRecord {
   status: string;
   heartbeatIntervalSeconds: number;
   deepAuditIntervalSeconds: number;
+  ttftThresholdMs: number;
   nextHeartbeatAt?: string;
   nextDeepAuditAt?: string;
   deletedAt?: string;
@@ -40,6 +41,7 @@ export interface CreateProviderNodeInput {
   apiKeySuffix: string;
   heartbeatIntervalSeconds?: number;
   deepAuditIntervalSeconds?: number;
+  ttftThresholdMs?: number;
 }
 
 export interface ProviderNodeRepository {
@@ -73,8 +75,8 @@ class SqliteProviderNodeRepository implements ProviderNodeRepository {
       .prepare(
         `insert into provider_nodes (
           id, workspace_id, name, base_url, base_url_host_hash, model_id, encrypted_api_key, api_key_suffix,
-          status, heartbeat_interval_seconds, deep_audit_interval_seconds, created_at, updated_at
-        ) values (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)`
+          status, heartbeat_interval_seconds, deep_audit_interval_seconds, ttft_threshold_ms, created_at, updated_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)`
       )
       .run(
         id,
@@ -87,6 +89,7 @@ class SqliteProviderNodeRepository implements ProviderNodeRepository {
         input.apiKeySuffix,
         input.heartbeatIntervalSeconds ?? 300,
         input.deepAuditIntervalSeconds ?? 43200,
+        input.ttftThresholdMs ?? 3000,
         now,
         now
       );
@@ -193,11 +196,11 @@ class PostgresProviderNodeRepository implements ProviderNodeRepository {
     await this.sql`
       insert into provider_nodes (
         id, workspace_id, name, base_url, base_url_host_hash, model_id, encrypted_api_key, api_key_suffix,
-        status, heartbeat_interval_seconds, deep_audit_interval_seconds, created_at, updated_at
+        status, heartbeat_interval_seconds, deep_audit_interval_seconds, ttft_threshold_ms, created_at, updated_at
       ) values (
         ${id}, ${input.workspaceId}, ${input.name}, ${input.baseUrl}, ${input.baseUrlHostHash}, ${input.modelId},
         ${input.encryptedApiKey}, ${input.apiKeySuffix}, 'active', ${input.heartbeatIntervalSeconds ?? 300},
-        ${input.deepAuditIntervalSeconds ?? 43200}, ${now}, ${now}
+        ${input.deepAuditIntervalSeconds ?? 43200}, ${input.ttftThresholdMs ?? 3000}, ${now}, ${now}
       )
     `;
     return (await this.list(input.workspaceId)).find((node) => node.id === id)!;
@@ -298,6 +301,7 @@ interface ProviderNodeRow {
   status: string;
   heartbeat_interval_seconds: number;
   deep_audit_interval_seconds: number;
+  ttft_threshold_ms: number;
   next_heartbeat_at?: string;
   next_deep_audit_at?: string;
   deleted_at?: string;
@@ -338,6 +342,7 @@ function mapProviderNodeRow(row: ProviderNodeRow): ProviderNodeRecord {
     status: row.status,
     heartbeatIntervalSeconds: row.heartbeat_interval_seconds,
     deepAuditIntervalSeconds: row.deep_audit_interval_seconds,
+    ttftThresholdMs: row.ttft_threshold_ms,
     nextHeartbeatAt: row.next_heartbeat_at,
     nextDeepAuditAt: row.next_deep_audit_at,
     deletedAt: row.deleted_at,

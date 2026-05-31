@@ -46,6 +46,12 @@ export function clampNodeSchedule(
   };
 }
 
+export function clampNodeAlertPolicy(input: { ttftThresholdMs?: unknown }) {
+  return {
+    ttftThresholdMs: Math.max(toPositiveInt(input.ttftThresholdMs, 3000), 100)
+  };
+}
+
 function toPositiveInt(value: unknown, fallback: number) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : fallback;

@@ -87,7 +87,8 @@ export async function runWorkerTick() {
             runType: job.type,
             targetModelId: payload.model,
             result: { ...result, evidenceSummary },
-            history: await listAuditRuns({ workspaceId: payload.workspaceId, limit: 200 })
+            history: await listAuditRuns({ workspaceId: payload.workspaceId, limit: 200 }),
+            ttftThresholdMs: payload.ttftThresholdMs
           })
         : [];
       for (const alertRule of alertRules) {
@@ -218,6 +219,7 @@ async function parseAuditJobPayload(payloadJson: string) {
     };
     billingRetest?: boolean;
     retestOfRunId?: string;
+    ttftThresholdMs?: number;
   };
 
   if (payload.nodeId) {
@@ -232,6 +234,7 @@ async function parseAuditJobPayload(payloadJson: string) {
         apiKey: decryptSecret(node.encryptedApiKey),
         model: node.modelId,
         suite: payload.suiteId ?? "smoke@1.0.0",
+        ttftThresholdMs: node.ttftThresholdMs,
         billingSnapshot: payload.billingSnapshot,
         billingRetest: payload.billingRetest ?? Boolean(payload.retestOfRunId),
         retestOfRunId: payload.retestOfRunId,
@@ -252,6 +255,7 @@ async function parseAuditJobPayload(payloadJson: string) {
     apiKey: payload.apiKey,
     model: payload.model ?? payload.modelId!,
     suite: payload.suiteId ?? "smoke@1.0.0",
+    ttftThresholdMs: payload.ttftThresholdMs,
     billingSnapshot: payload.billingSnapshot,
     billingRetest: payload.billingRetest ?? Boolean(payload.retestOfRunId),
     retestOfRunId: payload.retestOfRunId,

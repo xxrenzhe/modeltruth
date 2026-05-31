@@ -5,7 +5,12 @@ import { createJobRepository, createProviderNodeRepository } from "@modeltruth/d
 import { encryptSecret, getSecretSuffix } from "@modeltruth/crypto";
 import { assertPublicResolvedAddresses, validatePublicHttpsUrl } from "@modeltruth/shared";
 import { getCurrentSession } from "../../../../lib/auth";
-import { clampNodeSchedule, resolveNodeSchedulePolicy, validateNodeCreation } from "../../../../lib/workspace-tier-policy";
+import {
+  clampNodeAlertPolicy,
+  clampNodeSchedule,
+  resolveNodeSchedulePolicy,
+  validateNodeCreation
+} from "../../../../lib/workspace-tier-policy";
 
 export async function GET() {
   const session = await getCurrentSession();
@@ -33,6 +38,7 @@ export async function POST(request: Request) {
     const policy = resolveNodeSchedulePolicy(session.workspace.tier);
     validateNodeCreation(policy, existingNodes);
     const schedule = clampNodeSchedule(policy, body);
+    const alertPolicy = clampNodeAlertPolicy(body);
 
     const node = await repo.create({
       workspaceId: session.workspace.id,
@@ -43,7 +49,8 @@ export async function POST(request: Request) {
       encryptedApiKey: encryptSecret(apiKey),
       apiKeySuffix: getSecretSuffix(apiKey),
       heartbeatIntervalSeconds: schedule.heartbeatIntervalSeconds,
-      deepAuditIntervalSeconds: schedule.deepAuditIntervalSeconds
+      deepAuditIntervalSeconds: schedule.deepAuditIntervalSeconds,
+      ttftThresholdMs: alertPolicy.ttftThresholdMs
     });
     const initialHeartbeatAt = new Date();
     await enqueueInitialHeartbeat(node.id, initialHeartbeatAt);

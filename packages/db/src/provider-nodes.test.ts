@@ -28,7 +28,8 @@ describe("ProviderNodeRepository", () => {
       baseUrlHostHash: "host_hash",
       modelId: "gpt-5.1",
       encryptedApiKey: encryptSecret("sk-test-node-123456", "test-key"),
-      apiKeySuffix: getSecretSuffix("sk-test-node-123456")
+      apiKeySuffix: getSecretSuffix("sk-test-node-123456"),
+      ttftThresholdMs: 1250
     });
     const nodes = await repo.list(sessionResult!.session.workspace.id);
     const secretNode = await repo.getForAudit(node.id);
@@ -45,6 +46,8 @@ describe("ProviderNodeRepository", () => {
     rmSync(dir, { recursive: true, force: true });
 
     expect(node.apiKeySuffix).toBe("3456");
+    expect(node.ttftThresholdMs).toBe(1250);
+    expect(nodes[0].ttftThresholdMs).toBe(1250);
     expect(JSON.stringify(nodes)).not.toContain("sk-test-node");
     expect(secretNode?.encryptedApiKey).toBeTruthy();
     expect(dueNodes.map((item) => item.id)).toContain(node.id);

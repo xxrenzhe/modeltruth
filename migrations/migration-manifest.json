@@ -288,6 +288,24 @@
         "postgres": "select column_name from information_schema.columns where table_schema='public' and table_name='provider_disputes' and column_name='request_type';"
       },
       "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    },
+    {
+      "number": "016",
+      "name": "provider_node_alert_policy",
+      "sqliteMigration": "016_provider_node_alert_policy.sql",
+      "postgresMigration": "016_provider_node_alert_policy.pg.sql",
+      "impactQueries": [
+        "Provider node creation, workspace node listing and worker alert-rule evaluation by per-node TTFT threshold."
+      ],
+      "rollback": {
+        "sqlite": "Append a forward migration rebuilding provider_nodes without ttft_threshold_ms only if per-node alert policy is removed.",
+        "postgres": "Append a forward migration dropping provider_nodes.ttft_threshold_ms only if per-node alert policy is removed."
+      },
+      "validationSql": {
+        "sqlite": "select name from pragma_table_info('provider_nodes') where name='ttft_threshold_ms';",
+        "postgres": "select column_name from information_schema.columns where table_schema='public' and table_name='provider_nodes' and column_name='ttft_threshold_ms';"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
     }
   ]
 }

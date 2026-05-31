@@ -8,7 +8,8 @@ import {
   createJobRepository,
   createProviderNodeRepository,
   ensureSqliteReady,
-  listAuditRuns
+  listAuditRuns,
+  saveAuditRun
 } from "@modeltruth/db";
 import { runWorkerTick } from "./index";
 
@@ -51,6 +52,59 @@ describe("runWorkerTick provider-node audit jobs", () => {
     expect(run.traceId).toMatch(/^[a-f0-9]{32}$/);
     expect(JSON.stringify(run)).not.toContain("sk-node-secret");
   });
+
+  it("uses a node TTFT threshold when enqueueing latency alerts", async () => {
+    const harness = await createHarness("modeltruth-worker-node-ttft-alert-");
+    const workspaceId = await createWorkspace();
+    const node = await createNode(workspaceId, 1000);
+    await saveAuditRun({
+      id: "previous_ttft_warning",
+      workspaceId,
+      nodeId: node.id,
+      suiteId: "smoke",
+      suiteVersion: "1.0.0",
+      runType: "heartbeat",
+      targetModelId: "gpt-5.1",
+      status: "pass",
+      confidence: 0.9,
+      metrics: { statusCode: 200, ttftMs: 2500 },
+      assertions: [],
+      evidenceSummary: { requestBodyStored: false },
+      createdAt: new Date(Date.now() - 60_000).toISOString()
+    });
+    await enqueueNodeAudit(node.id);
+    vi.stubGlobal(
+      "fetch",
+      async () =>
+        new Response(
+          JSON.stringify({
+            model: "gpt-5.1",
+            choices: [{ message: { content: "modeltruth-smoke-node" } }],
+            usage: { prompt_tokens: 8, completion_tokens: 2, total_tokens: 10 }
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    );
+
+    await runWorkerTick();
+
+    const jobs = await createJobRepository();
+    try {
+      const alerts = await claimAlerts(jobs);
+      const payload = alerts.find((item) => item.rule === "p95_ttft");
+      expect(payload).toBeTruthy();
+      expect(payload).toMatchObject({
+        workspaceId,
+        nodeId: node.id,
+        rule: "p95_ttft",
+        status: "warning"
+      });
+      expect(String(payload?.message)).toContain("exceeds 1000ms");
+    } finally {
+      await jobs.close();
+      harness.cleanup();
+    }
+  });
 });
 
 async function createHarness(prefix: string) {
@@ -80,7 +134,7 @@ async function createWorkspace() {
   }
 }
 
-async function createNode(workspaceId: string) {
+async function createNode(workspaceId: string, ttftThresholdMs = 3000) {
   const repo = await createProviderNodeRepository();
   try {
     return await repo.create({
@@ -90,10 +144,20 @@ async function createNode(workspaceId: string) {
       baseUrlHostHash: "node_host_hash",
       modelId: "gpt-5.1",
       encryptedApiKey: encryptSecret("sk-node-secret-123456"),
-      apiKeySuffix: getSecretSuffix("sk-node-secret-123456")
+      apiKeySuffix: getSecretSuffix("sk-node-secret-123456"),
+      ttftThresholdMs
     });
   } finally {
     await repo.close();
+  }
+}
+
+async function claimAlerts(jobs: Awaited<ReturnType<typeof createJobRepository>>) {
+  const alerts: Array<Record<string, unknown>> = [];
+  for (;;) {
+    const alert = await jobs.claimNext({ workerId: "node-alert-test", types: ["alert"] });
+    if (!alert) return alerts;
+    alerts.push(JSON.parse(alert.payloadJson) as Record<string, unknown>);
   }
 }
 

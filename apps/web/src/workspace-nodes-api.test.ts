@@ -73,10 +73,12 @@ describe("workspace nodes API", () => {
       modelId: "gpt-5.1",
       apiKeySuffix: "3456",
       heartbeatIntervalSeconds: 300,
-      deepAuditIntervalSeconds: 43200
+      deepAuditIntervalSeconds: 43200,
+      ttftThresholdMs: 750
     });
     expect(bodies[3].error).toBe("pro plan supports up to 3 active provider nodes");
     expect(listBody.nodes).toHaveLength(3);
+    expect(listBody.nodes.find((node: { id: string }) => node.id === bodies[0].node.id).ttftThresholdMs).toBe(750);
     expect(initialHeartbeat?.type).toBe("heartbeat");
     expect(initialPayload).toMatchObject({
       source: "node-create",
@@ -156,7 +158,8 @@ function nodeRequest(name: string, apiKey: string) {
       modelId: "gpt-5.1",
       apiKey,
       heartbeatIntervalSeconds: 10,
-      deepAuditIntervalSeconds: 3600
+      deepAuditIntervalSeconds: 3600,
+      ttftThresholdMs: 750
     })
   });
 }

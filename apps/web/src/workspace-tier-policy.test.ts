@@ -42,6 +42,7 @@ function node(id: string): ProviderNodeRecord {
     status: "active",
     heartbeatIntervalSeconds: 300,
     deepAuditIntervalSeconds: 43200,
+    ttftThresholdMs: 3000,
     createdAt: new Date(0).toISOString(),
     updatedAt: new Date(0).toISOString()
   };

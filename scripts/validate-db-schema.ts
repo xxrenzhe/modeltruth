@@ -17,7 +17,7 @@ const criticalTables = [
 
 const criticalColumns: Record<string, string[]> = {
   workspaces: ["tier", "stripe_customer_id", "stripe_subscription_id", "subscription_status"],
-  provider_nodes: ["workspace_id", "base_url_host_hash", "encrypted_api_key", "api_key_suffix", "deleted_at"],
+  provider_nodes: ["workspace_id", "base_url_host_hash", "encrypted_api_key", "api_key_suffix", "deleted_at", "ttft_threshold_ms"],
   jobs: ["type", "status", "payload_json", "attempts", "max_attempts", "run_after", "locked_at", "locked_by", "last_error"],
   audit_runs: ["trace_id", "provider_slug", "workspace_id", "node_id", "suite_id", "suite_version", "metrics_json", "evidence_summary_json"],
   alert_channels: ["workspace_id", "type", "encrypted_target", "target_suffix"],
