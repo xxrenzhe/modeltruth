@@ -98,7 +98,11 @@ describe("runSchedulerTick calibration scheduling", () => {
       const heartbeat = await jobs.claimNext({ workerId: "test-scheduler", types: ["heartbeat"] });
       const deepAudit = await jobs.claimNext({ workerId: "test-scheduler", types: ["deepAudit"] });
       expect(JSON.parse(heartbeat?.payloadJson ?? "{}").fingerprint).toMatch(/^heartbeat:/);
-      expect(JSON.parse(deepAudit?.payloadJson ?? "{}").fingerprint).toMatch(/^deepAudit:/);
+      const deepAuditPayload = JSON.parse(deepAudit?.payloadJson ?? "{}");
+      expect(["smoke@1.0.0", "reasoning-lite@1.0.0", "context-lite@1.0.0"]).toContain(deepAuditPayload.suiteId);
+      expect(deepAuditPayload.fingerprint).toMatch(/^deepAudit:/);
+      expect(deepAuditPayload.fingerprint).toContain(`:${deepAuditPayload.nodeId}:`);
+      expect(deepAuditPayload.fingerprint.endsWith(`:${deepAuditPayload.suiteId}`)).toBe(true);
     } finally {
       await jobs.close();
       harness.cleanup();

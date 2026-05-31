@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ensureSqliteReady } from "./index";
 import { applyAuditRetentionPolicy, getEvidencePackage, getPublicAuditSummary, listAuditRuns, saveAuditRun } from "./audit-runs";
+import { createRiskFlagRepository } from "./risk-flags";
 
 describe("audit run evidence persistence", () => {
   it("stores redacted evidence packages for export", async () => {
@@ -62,6 +63,8 @@ describe("audit run evidence persistence", () => {
     await saveAuditRun({
       id: "run_warning_retest",
       providerSlug: "openai",
+      workspaceId: "ws_private",
+      nodeId: "node_private",
       suiteId: "smoke",
       suiteVersion: "1.0.0",
       runType: "heartbeat",
@@ -102,6 +105,12 @@ describe("audit run evidence persistence", () => {
     const runs = await listAuditRuns();
     const summary = await getPublicAuditSummary();
     const openaiSummary = await getPublicAuditSummary({ providerSlug: "openai" });
+    const riskFlags = await createRiskFlagRepository();
+    const persistedFlags = await riskFlags.listByProvider("openai", ["active"]);
+    const persistedEvidence = await riskFlags.listEvidence(persistedFlags[0].id);
+    await riskFlags.transition(persistedFlags[0].id, "resolved", "operator", "false positive cleared");
+    const resolvedSummary = await getPublicAuditSummary({ providerSlug: "openai" });
+    await riskFlags.close();
 
     if (previousPath === undefined) delete process.env.DATABASE_PATH;
     else process.env.DATABASE_PATH = previousPath;
@@ -128,6 +137,10 @@ describe("audit run evidence persistence", () => {
     expect(openaiSummary.totalRuns).toBe(3);
     expect(openaiSummary.isFresh).toBe(true);
     expect(openaiSummary.passRate).toBe(1 / 3);
+    expect(persistedFlags).toHaveLength(1);
+    expect(persistedFlags[0]).toMatchObject({ providerSlug: "openai", assertionId: "OVERALL_STATUS", evidenceCount: 2 });
+    expect(persistedEvidence.map((item) => item.runId)).toEqual(["run_warning", "run_warning_retest"]);
+    expect(JSON.stringify(persistedEvidence)).not.toContain("sk-public-summary-leak");
     expect(summary.riskFlags.map((run) => run.runId)).toEqual(expect.arrayContaining(["run_warning", "run_warning_retest"]));
     expect(summary.riskFlags.map((run) => run.runId)).not.toContain("run_single_warning");
     expect(JSON.stringify(summary.riskFlags)).not.toContain("ws_private");
@@ -141,6 +154,7 @@ describe("audit run evidence persistence", () => {
     expect(summary.riskFlags.find((run) => run.runId === "run_warning")?.evidenceSummary).toMatchObject({
       responseMetadata: { usage: { totalTokens: 12 } }
     });
+    expect(resolvedSummary.riskFlags).toHaveLength(0);
     expect(JSON.stringify(summary.riskFlags)).not.toContain("private completion");
     expect(JSON.stringify(summary.riskFlags)).not.toContain("private excerpt");
   });

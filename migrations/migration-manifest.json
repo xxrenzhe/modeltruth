@@ -324,6 +324,24 @@
         "postgres": "select table_name from information_schema.tables where table_schema='public' and table_name='provider_subscriptions';"
       },
       "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    },
+    {
+      "number": "018",
+      "name": "risk_flags",
+      "sqliteMigration": "018_risk_flags.sql",
+      "postgresMigration": "018_risk_flags.pg.sql",
+      "impactQueries": [
+        "Evidence Center risk flag state machine, dispute timeline and deduplicated evidence package lookup by provider/status/run_id."
+      ],
+      "rollback": {
+        "sqlite": "Append a forward migration disabling risk flag UI/workflows and dropping risk_flag_events, evidence_packages and risk_flags before launch if required.",
+        "postgres": "Append a forward migration disabling risk flag UI/workflows and dropping risk_flag_events, evidence_packages and risk_flags before launch if required."
+      },
+      "validationSql": {
+        "sqlite": "select name from sqlite_master where type='table' and name in ('risk_flags','risk_flag_events','evidence_packages');",
+        "postgres": "select table_name from information_schema.tables where table_schema='public' and table_name in ('risk_flags','risk_flag_events','evidence_packages');"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
     }
   ]
 }

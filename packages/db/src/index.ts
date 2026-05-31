@@ -469,3 +469,14 @@ export type {
 export { createModelRegistryRepository } from "./model-registry";
 export type { PublicTokenUsage } from "./public-usage";
 export { normalizePublicUsage } from "./public-usage";
+export type {
+  EvidencePackageRecord,
+  RiskFlagEventRecord,
+  RiskFlagEventType,
+  RiskFlagRecord,
+  RiskFlagRepository,
+  RiskFlagSeverity,
+  RiskFlagStatus,
+  UpsertRiskFlagInput
+} from "./risk-flags";
+export { createRiskFlagRepository } from "./risk-flags";

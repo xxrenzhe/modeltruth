@@ -13,6 +13,9 @@ const criticalTables = [
   "model_registry",
   "model_calibrations",
   "provider_subscriptions",
+  "risk_flags",
+  "risk_flag_events",
+  "evidence_packages",
   "migration_history"
 ];
 
@@ -28,7 +31,10 @@ const criticalColumns: Record<string, string[]> = {
   workspace_members: ["workspace_id", "email", "role", "status"],
   workspace_privacy_settings: ["workspace_id", "save_full_responses"],
   byo_probes: ["workspace_id", "region", "token_hash", "status", "last_seen_at"],
-  provider_subscriptions: ["provider_slug", "email", "notification_type", "status"]
+  provider_subscriptions: ["provider_slug", "email", "notification_type", "status"],
+  risk_flags: ["workspace_id", "node_id", "provider_slug", "assertion_id", "severity", "status", "evidence_count"],
+  risk_flag_events: ["risk_flag_id", "event_type", "from_status", "to_status", "run_id", "evidence_package_id"],
+  evidence_packages: ["run_id", "provider_slug", "risk_flag_id", "redacted_summary_json"]
 };
 
 const criticalIndexes = [
@@ -45,7 +51,11 @@ const criticalIndexes = [
   "idx_provider_disputes_request_type",
   "idx_workspace_members_workspace_status",
   "idx_byo_probes_token_hash",
-  "idx_provider_subscriptions_provider_status"
+  "idx_provider_subscriptions_provider_status",
+  "idx_risk_flags_provider_status",
+  "idx_risk_flags_workspace_node_assertion",
+  "idx_risk_flag_events_flag_created",
+  "idx_evidence_packages_run"
 ];
 
 const health = await checkDatabaseHealth();

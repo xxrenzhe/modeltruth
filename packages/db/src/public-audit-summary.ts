@@ -40,6 +40,8 @@ export interface ProviderAuditSummary {
 }
 
 export interface PublicRiskFlag {
+  riskFlagId?: string;
+  riskFlagStatus?: string;
   runId: string;
   providerSlug?: string;
   suiteId: string;
@@ -53,7 +55,7 @@ export interface PublicRiskFlag {
   createdAt: string;
 }
 
-export function buildPublicAuditSummary(allRuns: AuditRunListItem[], providerSlug?: string): PublicAuditSummary {
+export function buildPublicAuditSummary(allRuns: AuditRunListItem[], providerSlug?: string, riskFlagStatuses = new Map<string, { riskFlagId: string; status: string }>()): PublicAuditSummary {
   const runs = providerSlug ? allRuns.filter((run) => run.providerSlug === providerSlug) : allRuns;
   const aggregate = aggregateRuns(runs, "30d");
   const freshness = dashboardFreshness(runs);
@@ -66,19 +68,19 @@ export function buildPublicAuditSummary(allRuns: AuditRunListItem[], providerSlu
     evidenceScore: aggregate.evidenceScore,
     ...freshness,
     windows: buildWindows(runs),
-    providers: buildProviderSummaries(allRuns),
-    riskFlags: publicRiskFlags(runs).slice(0, 10).map(toPublicRiskFlag)
+    providers: buildProviderSummaries(allRuns, riskFlagStatuses),
+    riskFlags: publicRiskFlags(runs, riskFlagStatuses).slice(0, 10).map((run) => toPublicRiskFlag(run, riskFlagStatuses))
   };
 }
 
-function buildProviderSummaries(runs: AuditRunListItem[]): ProviderAuditSummary[] {
+function buildProviderSummaries(runs: AuditRunListItem[], riskFlagStatuses: Map<string, { riskFlagId: string; status: string }>): ProviderAuditSummary[] {
   const providerSlugs = [...new Set(runs.map((run) => run.providerSlug).filter((slug): slug is string => Boolean(slug)))].sort();
   return providerSlugs.map((providerSlug) => {
     const providerRuns = runs.filter((run) => run.providerSlug === providerSlug);
     return {
       providerSlug,
       windows: buildWindows(providerRuns),
-      riskFlags: publicRiskFlags(providerRuns).slice(0, 5).map(toPublicRiskFlag),
+      riskFlags: publicRiskFlags(providerRuns, riskFlagStatuses).slice(0, 5).map((run) => toPublicRiskFlag(run, riskFlagStatuses)),
       evidenceScore: aggregateRuns(providerRuns, "30d").evidenceScore,
       ...dashboardFreshness(providerRuns)
     };
@@ -144,7 +146,7 @@ function riskRuns(runs: AuditRunListItem[]) {
   return runs.filter((run) => ["fail", "error", "warning"].includes(run.status));
 }
 
-function publicRiskFlags(runs: AuditRunListItem[]) {
+function publicRiskFlags(runs: AuditRunListItem[], riskFlagStatuses: Map<string, { riskFlagId: string; status: string }>) {
   const groups = new Map<string, AuditRunListItem[]>();
   for (const run of runs) {
     const group = groups.get(riskGroupKey(run)) ?? [];
@@ -152,6 +154,8 @@ function publicRiskFlags(runs: AuditRunListItem[]) {
     groups.set(riskGroupKey(run), group);
   }
   return riskRuns(runs).filter((run) => {
+    const persisted = riskFlagStatuses.get(run.runId);
+    if (persisted?.status === "resolved") return false;
     const group = groups.get(riskGroupKey(run)) ?? [];
     const riskCount = riskRuns(group).length;
     const hasRetest = group.length >= 2;
@@ -163,8 +167,11 @@ function riskGroupKey(run: AuditRunListItem) {
   return [run.providerSlug ?? "unknown-provider", run.targetModelId, run.suiteId].join(":");
 }
 
-function toPublicRiskFlag(run: AuditRunListItem): PublicRiskFlag {
+function toPublicRiskFlag(run: AuditRunListItem, riskFlagStatuses: Map<string, { riskFlagId: string; status: string }>): PublicRiskFlag {
+  const persisted = riskFlagStatuses.get(run.runId);
   return {
+    riskFlagId: persisted?.riskFlagId,
+    riskFlagStatus: persisted?.status,
     runId: run.runId,
     providerSlug: run.providerSlug,
     suiteId: run.suiteId,

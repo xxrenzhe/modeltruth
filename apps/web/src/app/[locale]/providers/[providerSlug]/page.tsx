@@ -168,7 +168,9 @@ export default async function ProviderPage({
                   <strong>{flag.runId}</strong>
                   <p>{flag.suiteId} / {flag.runType} / {new Date(flag.createdAt).toISOString()}</p>
                 </div>
-                <span className={`pill ${flag.status === "warning" ? "warning" : "fail"}`}>{flag.status}</span>
+                <span className={`pill ${flag.status === "warning" ? "warning" : "fail"}`}>
+                  {flag.status}{flag.riskFlagStatus ? ` / ${riskFlagStatusLabel(flag.riskFlagStatus)}` : ""}
+                </span>
                 <dl>
                   <div>
                     <dt>Model</dt>
@@ -235,6 +237,11 @@ function requestTypeLabel(value: string | undefined) {
   if (value === "takedown") return "Takedown request";
   if (value === "provider_response") return "Provider response";
   return "Correction request";
+}
+
+function riskFlagStatusLabel(value: string) {
+  if (value === "under_review") return "under review";
+  return value.replaceAll("_", " ");
 }
 
 function formatFreshness(seconds: number | undefined) {

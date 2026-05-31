@@ -1,6 +1,8 @@
 import postgres from "postgres";
 import { getAppConfig } from "@modeltruth/config";
+import { redactSecrets } from "@modeltruth/crypto";
 import { buildPublicAuditSummary, type PublicAuditSummary } from "./public-audit-summary";
+import { createRiskFlagRepository, type RiskFlagSeverity } from "./risk-flags";
 
 export interface EvidencePackage {
   runId: string;
@@ -92,6 +94,7 @@ export async function saveAuditRun(input: SaveAuditRunInput): Promise<void> {
     } finally {
       await sql.end();
     }
+    await persistRiskFlagEvidence(input, createdAt);
     return;
   }
 
@@ -127,6 +130,7 @@ export async function saveAuditRun(input: SaveAuditRunInput): Promise<void> {
   } finally {
     db.close();
   }
+  await persistRiskFlagEvidence(input, createdAt);
 }
 
 export async function applyAuditRetentionPolicy(options: ApplyAuditRetentionOptions = {}): Promise<AuditRetentionResult> {
@@ -268,7 +272,14 @@ export async function listAuditRuns(options: { workspaceId?: string; limit?: num
 
 export async function getPublicAuditSummary(options: { providerSlug?: string } = {}): Promise<PublicAuditSummary> {
   const allRuns = await listAuditRuns({ limit: 5000 });
-  return buildPublicAuditSummary(allRuns, options.providerSlug);
+  const repo = await createRiskFlagRepository();
+  try {
+    const statuses = await repo.listEvidenceStatuses(options.providerSlug);
+    const statusByRunId = new Map(statuses.map((status) => [status.runId, { riskFlagId: status.riskFlagId, status: status.status }]));
+    return buildPublicAuditSummary(allRuns, options.providerSlug, statusByRunId);
+  } finally {
+    await repo.close();
+  }
 }
 
 interface EvidenceRow {
@@ -347,5 +358,65 @@ function mapAuditRunListRow(row: AuditRunListRow): AuditRunListItem {
     assertions: parseJson(row.assertions_json),
     evidenceSummary: parseJson(row.evidence_summary_json),
     createdAt: row.created_at
+  };
+}
+
+async function persistRiskFlagEvidence(input: SaveAuditRunInput, createdAt: string) {
+  const severity = riskSeverity(input.status);
+  if (!severity) return;
+  const riskyAssertions = riskAssertions(input.assertions, severity);
+  if (riskyAssertions.length === 0) return;
+  const repo = await createRiskFlagRepository();
+  try {
+    for (const assertion of riskyAssertions) {
+      await repo.upsertActive({
+        workspaceId: input.workspaceId,
+        nodeId: input.nodeId,
+        providerSlug: input.providerSlug,
+        assertionId: assertion.id,
+        severity: assertion.severity,
+        runId: input.id,
+        targetModelId: input.targetModelId,
+        suiteId: input.suiteId,
+        redactedSummary: redactSecrets({
+          status: input.status,
+          confidence: input.confidence,
+          metrics: input.metrics,
+          assertion: assertion.publicSummary,
+          evidenceSummary: input.evidenceSummary
+        }),
+        observedAt: createdAt
+      });
+    }
+  } finally {
+    await repo.close();
+  }
+}
+
+function riskSeverity(status: string): RiskFlagSeverity | undefined {
+  if (status === "error") return "error";
+  if (status === "fail") return "fail";
+  if (status === "warning") return "warning";
+  return undefined;
+}
+
+function riskAssertions(assertions: unknown, fallbackSeverity: RiskFlagSeverity) {
+  if (!Array.isArray(assertions)) return [{ id: "OVERALL_STATUS", severity: fallbackSeverity, publicSummary: { status: fallbackSeverity } }];
+  const risky = assertions.flatMap((assertion) => {
+    const record = assertion && typeof assertion === "object" && !Array.isArray(assertion) ? (assertion as Record<string, unknown>) : undefined;
+    const status = typeof record?.status === "string" ? riskSeverity(record.status) : undefined;
+    const id = typeof record?.id === "string" && record.id.trim() ? record.id : undefined;
+    if (!record || !status || !id) return [];
+    return [{ id, severity: status, publicSummary: publicAssertion(record) }];
+  });
+  return risky.length ? risky : [{ id: "OVERALL_STATUS", severity: fallbackSeverity, publicSummary: { status: fallbackSeverity } }];
+}
+
+function publicAssertion(record: Record<string, unknown>) {
+  return {
+    id: record.id,
+    status: record.status,
+    confidence: typeof record.confidence === "number" ? record.confidence : undefined,
+    message: typeof record.message === "string" ? record.message : undefined
   };
 }

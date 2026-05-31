@@ -11,6 +11,7 @@ import { installGracefulShutdown, writeJsonLog } from "@modeltruth/shared";
 
 const intervalMs = Number(process.env.SCHEDULER_INTERVAL_MS ?? 60_000);
 const calibrationIntervalMs = Number(process.env.MODELTRUTH_CALIBRATION_INTERVAL_MS ?? 7 * 24 * 60 * 60 * 1000);
+const scheduledDeepAuditSuites = ["smoke@1.0.0", "reasoning-lite@1.0.0", "context-lite@1.0.0"] as const;
 
 export async function runSchedulerTick() {
   await runRetentionMaintenance();
@@ -36,11 +37,12 @@ export async function runSchedulerTick() {
         }
       }
       if (!node.nextDeepAuditAt || new Date(node.nextDeepAuditAt) <= now) {
-        const fingerprint = scheduleFingerprint(node.id, "deepAudit", now, node.deepAuditIntervalSeconds);
+        const suiteId = deepAuditSuiteForWindow(node.id, now, node.deepAuditIntervalSeconds);
+        const fingerprint = scheduleFingerprint(node.id, "deepAudit", now, node.deepAuditIntervalSeconds, suiteId);
         if (!(await jobs.hasActiveFingerprint("deepAudit", fingerprint))) {
           const job = await jobs.enqueue({
             type: "deepAudit",
-            payload: { source: "scheduler", nodeId: node.id, suiteId: "smoke@1.0.0", scheduledAt: now.toISOString(), fingerprint }
+            payload: { source: "scheduler", nodeId: node.id, suiteId, scheduledAt: now.toISOString(), fingerprint }
           });
           await nodes.markScheduled(node.id, "deepAudit", new Date(now.getTime() + node.deepAuditIntervalSeconds * 1000));
           writeJsonLog({
@@ -105,9 +107,27 @@ function digestWindow(now: Date, notificationType: "weekly_digest" | "risk_trend
   return notificationType === "weekly_digest" ? Math.floor(days / 7) : days;
 }
 
-function scheduleFingerprint(nodeId: string, type: "heartbeat" | "deepAudit", now: Date, intervalSeconds: number) {
-  const windowStart = Math.floor(now.getTime() / Math.max(intervalSeconds, 1) / 1000);
-  return `${type}:${nodeId}:${windowStart}`;
+function deepAuditSuiteForWindow(nodeId: string, now: Date, intervalSeconds: number) {
+  const windowStart = scheduleWindowStart(now, intervalSeconds);
+  const index = Math.abs(hashString(`${nodeId}:${windowStart}`)) % scheduledDeepAuditSuites.length;
+  return scheduledDeepAuditSuites[index];
+}
+
+function scheduleFingerprint(nodeId: string, type: "heartbeat" | "deepAudit", now: Date, intervalSeconds: number, suiteId?: string) {
+  const suitePart = suiteId ? `:${suiteId}` : "";
+  return `${type}:${nodeId}:${scheduleWindowStart(now, intervalSeconds)}${suitePart}`;
+}
+
+function scheduleWindowStart(now: Date, intervalSeconds: number) {
+  return Math.floor(now.getTime() / Math.max(intervalSeconds, 1) / 1000);
+}
+
+function hashString(value: string) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) | 0;
+  }
+  return hash >>> 0;
 }
 
 async function runRetentionMaintenance() {
