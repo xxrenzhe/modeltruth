@@ -142,6 +142,50 @@ describe("modeltruth cli", () => {
     expect(result.stderr).toContain("upload requires --consent true");
   });
 
+  it("tracks local repeat audits for activation without storing secrets or raw endpoint URLs", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "modeltruth-cli-activation-"));
+    const previousCliHome = process.env.MODELTRUTH_CLI_HOME;
+    process.env.MODELTRUTH_CLI_HOME = dir;
+    globalThis.fetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "modeltruth-smoke-ok" } }],
+          usage: { total_tokens: 12 }
+        }),
+        { status: 200 }
+      )
+    ) as typeof fetch;
+
+    const args = [
+      "audit",
+      "--base-url",
+      "https://api.example.com/v1",
+      "--model",
+      "gpt-5.1",
+      "--api-key",
+      "sk-cli-secret-activation",
+      "--output",
+      path.join(dir, "report.json")
+    ];
+    const first = await runCli(args, { NODE_ENV: "test" } as NodeJS.ProcessEnv);
+    const second = await runCli(args, { NODE_ENV: "test" } as NodeJS.ProcessEnv);
+    const third = await runCli(args, { NODE_ENV: "test" } as NodeJS.ProcessEnv);
+    const history = readFileSync(path.join(dir, "audit-history.json"), "utf8");
+
+    if (previousCliHome === undefined) delete process.env.MODELTRUTH_CLI_HOME;
+    else process.env.MODELTRUTH_CLI_HOME = previousCliHome;
+    rmSync(dir, { recursive: true, force: true });
+
+    expect(JSON.parse(first.stdout).activationCta).toBeUndefined();
+    expect(JSON.parse(second.stdout).activationCta).toBeUndefined();
+    expect(JSON.parse(third.stdout).activationCta).toContain("https://modeltruth.ai/pro");
+    expect(history).toContain("modeltruth.cli-audit-history.v1");
+    expect(history).toContain("\"count\": 3");
+    expect(history).not.toContain("sk-cli-secret-activation");
+    expect(history).not.toContain("https://api.example.com");
+    expect(history).not.toContain("modeltruth-smoke-ok");
+  });
+
   it("persists login session and reuses it for later uploads", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "modeltruth-cli-login-"));
     const reportPath = path.join(dir, "report.json");

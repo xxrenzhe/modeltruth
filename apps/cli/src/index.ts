@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -59,6 +60,12 @@ async function auditCommand(
   });
   const output = stringFlag(flags, "output") ?? "modeltruth-report.json";
   writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`);
+  const activation = recordLocalAuditActivation({
+    baseUrl: requiredFlag(flags, "base-url"),
+    model: requiredFlag(flags, "model"),
+    suiteId,
+    status: result.overallStatus
+  });
   if (String(flags["consent-upload"]) === "true") {
     const upload = await uploadReport(report, flags, env);
     return {
@@ -68,6 +75,7 @@ async function auditCommand(
         runId: result.runId,
         status: result.overallStatus,
         uploaded: true,
+        activationCta: activation.cta,
         upload
       }),
       stderr: ""
@@ -75,7 +83,13 @@ async function auditCommand(
   }
   return {
     exitCode: 0,
-    stdout: JSON.stringify({ reportPath: output, runId: result.runId, status: result.overallStatus, uploaded: false }),
+    stdout: JSON.stringify({
+      reportPath: output,
+      runId: result.runId,
+      status: result.overallStatus,
+      uploaded: false,
+      activationCta: activation.cta
+    }),
     stderr: ""
   };
 }
@@ -212,6 +226,54 @@ function readCliConfig(): { apiBase?: string; sessionToken?: string } {
   } catch {
     return {};
   }
+}
+
+function auditHistoryPath() {
+  return path.join(path.dirname(configPath()), "audit-history.json");
+}
+
+function recordLocalAuditActivation(input: { baseUrl: string; model: string; suiteId: string; status: string }) {
+  const now = new Date().toISOString();
+  const key = createHash("sha256")
+    .update(`${normalizedEndpoint(input.baseUrl)}|${input.model}|${input.suiteId}`)
+    .digest("hex");
+  const history = readAuditHistory();
+  const previous = history.endpoints[key] ?? { count: 0 };
+  const next = {
+    count: previous.count + 1,
+    lastStatus: input.status,
+    lastRunAt: now
+  };
+  history.endpoints[key] = next;
+  writeAuditHistory(history);
+  return {
+    count: next.count,
+    cta: next.count >= 3 ? "You have audited this endpoint 3+ times locally. Keep it monitored 24/7: https://modeltruth.ai/pro" : undefined
+  };
+}
+
+function readAuditHistory(): { schemaVersion: string; endpoints: Record<string, { count: number; lastStatus?: string; lastRunAt?: string }> } {
+  try {
+    const parsed = JSON.parse(readFileSync(auditHistoryPath(), "utf8"));
+    if (parsed?.schemaVersion === "modeltruth.cli-audit-history.v1" && parsed.endpoints && typeof parsed.endpoints === "object") {
+      return parsed;
+    }
+  } catch {
+    // Missing or invalid local activation history should not block an audit.
+  }
+  return { schemaVersion: "modeltruth.cli-audit-history.v1", endpoints: {} };
+}
+
+function writeAuditHistory(history: { schemaVersion: string; endpoints: Record<string, { count: number; lastStatus?: string; lastRunAt?: string }> }) {
+  mkdirSync(path.dirname(auditHistoryPath()), { recursive: true });
+  writeFileSync(auditHistoryPath(), `${JSON.stringify(history, null, 2)}\n`, { mode: 0o600 });
+}
+
+function normalizedEndpoint(baseUrl: string) {
+  const url = new URL(baseUrl);
+  url.hash = "";
+  url.search = "";
+  return url.toString().replace(/\/+$/, "");
 }
 
 function parseJsonOrText(body: string): unknown {
