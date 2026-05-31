@@ -1,6 +1,7 @@
 import type { AuditMetricSummary, AuditStatus } from "@modeltruth/shared";
 import type { BillingSnapshot, BillingVarianceResult } from "./billing-variance";
 import type { CostEstimate } from "./model-pricing";
+import type { RetestRecommendation } from "./scoring";
 import type { NormalizedTokenUsage } from "./usage";
 
 export type AuditSuiteId = "smoke" | "reasoning-lite" | "context-lite" | "billing-lite" | "fingerprint-calibration";
@@ -51,7 +52,8 @@ export interface SmokeAuditResult {
     costEstimate?: CostEstimate;
     billingVariance?: BillingVarianceResult;
   };
-  assertions: Array<{ id: string; status: AuditStatus; confidence: number; message: string }>;
+  assertions: Array<{ id: string; status: AuditStatus; confidence: number; message: string; weight?: number }>;
+  retestRecommendation: RetestRecommendation;
   evidenceSummary: {
     redaction: "applied";
     requestBodyStored: false;
@@ -65,6 +67,9 @@ export interface SmokeAuditResult {
     suiteId?: AuditSuiteId;
     suiteVersion?: string;
     promptNonceHash?: string;
+    numericNonceHash?: string;
+    timestampBucket?: string;
+    retestRecommendation?: RetestRecommendation;
     requestMetadata?: Record<string, unknown>;
     responseMetadata?: Record<string, unknown>;
     latencyTimeline?: Record<string, number>;

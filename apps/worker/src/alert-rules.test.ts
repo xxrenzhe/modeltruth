@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { SmokeAuditResult } from "@modeltruth/audit-engine";
 import { evaluateAlertRules } from "./alert-rules";
 
 const now = new Date("2026-05-31T00:00:00.000Z");
@@ -49,6 +50,21 @@ describe("evaluateAlertRules", () => {
     expect(rules).toContainEqual(expect.objectContaining({ rule: "deep_audit_consecutive_fail", status: "fail" }));
   });
 
+  it("treats warning runs with failed assertions as deep audit failures", () => {
+    const rules = evaluateAlertRules({
+      workspaceId: "ws_1",
+      nodeId: "node_1",
+      runId: "run_current",
+      runType: "deepAudit",
+      targetModelId: "gpt-5.1",
+      result: result("warning", { statusCode: 500 }, {}, [{ id: "HTTP_STATUS_OK", status: "fail", confidence: 1, message: "HTTP 500" }]),
+      history: [run("run_previous", "deepAudit", "warning", { statusCode: 500 })],
+      now
+    });
+
+    expect(rules).toContainEqual(expect.objectContaining({ rule: "deep_audit_consecutive_fail", status: "fail" }));
+  });
+
   it("triggers billing variance only when a retest remains above 5 percent", () => {
     const initial = evaluateAlertRules({
       workspaceId: "ws_1",
@@ -76,14 +92,20 @@ describe("evaluateAlertRules", () => {
   });
 });
 
-function result(status: "pass" | "warning" | "fail", metrics: Record<string, unknown>, evidenceSummary: Record<string, unknown> = {}) {
+function result(
+  status: "pass" | "warning" | "fail",
+  metrics: Record<string, unknown>,
+  evidenceSummary: Record<string, unknown> = {},
+  assertions: SmokeAuditResult["assertions"] = []
+) {
   return {
     runId: crypto.randomUUID(),
     traceId: "1234567890abcdef1234567890abcdef",
     overallStatus: status,
     confidence: 0.9,
     metrics,
-    assertions: [],
+    assertions,
+    retestRecommendation: "none" as const,
     evidenceSummary: { redaction: "applied" as const, requestBodyStored: false as const, suiteId: "smoke" as const, ...evidenceSummary }
   };
 }
@@ -99,6 +121,7 @@ function run(runId: string, runType: string, status: string, metrics: Record<str
     status,
     confidence: 0.8,
     metrics,
+    assertions: [{ id: "HTTP_STATUS_OK", status: status === "pass" ? "pass" : "fail", confidence: 1, message: `HTTP ${status}` }],
     evidenceSummary: {},
     createdAt: new Date(now.getTime() - 60_000).toISOString()
   };

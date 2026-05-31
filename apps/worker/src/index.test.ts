@@ -462,7 +462,7 @@ async function seedPreviousDeepAuditFail(id: string) {
     confidence: 0.9,
     createdAt: new Date(Date.now() - 60_000).toISOString(),
     metrics: { statusCode: 500 },
-    assertions: [],
+    assertions: [{ id: "HTTP_STATUS_OK", status: "fail", confidence: 1, message: "Endpoint returned HTTP 500" }],
     evidenceSummary: { requestBodyStored: false }
   });
 }

@@ -2,7 +2,9 @@ import { validatePublicHttpsUrl, type AuditStatus } from "@modeltruth/shared";
 import { evaluateBillingVariance, type BillingSnapshot } from "./billing-variance";
 import { completionMetadata, errorMetadata, httpMetadata, promptDiffSummary } from "./evidence-summary";
 import { estimateModelCost } from "./model-pricing";
+import { materializeSuitePrompt, type MaterializedPrompt } from "./prompt-materialization";
 import { ModelTruthPromptfooProvider, runPromptfooMatrix } from "./promptfoo-runner";
+import { aggregateConfidence, aggregateStatus, buildRetestRecommendation, withAssertionWeight } from "./scoring";
 import type { AuditSuiteDefinition, AuditSuiteId, ModelCapabilityProfile, SmokeAuditInput, SmokeAuditResult } from "./types";
 import { normalizeUsage, usageCompletionTokenCount } from "./usage";
 export type { LiteLLMAdapterOptions, ProviderAdapter } from "./litellm-adapter";
@@ -105,12 +107,14 @@ async function executeSuite(input: SmokeAuditInput, suite: AuditSuiteDefinition)
       usage
     });
     const billingVariance = suite.suiteId === "billing-lite" ? evaluateBillingVariance(input.billingSnapshot) : undefined;
+    const confidence = aggregateConfidence(assertions);
+    const retestRecommendation = buildRetestRecommendation({ overallStatus, assertions, billingVariance });
 
     return {
       runId: crypto.randomUUID(),
       traceId,
       overallStatus,
-      confidence: aggregateConfidence(assertions),
+      confidence,
       metrics: {
         ttftMs,
         totalLatencyMs,
@@ -121,6 +125,7 @@ async function executeSuite(input: SmokeAuditInput, suite: AuditSuiteDefinition)
         tokensPerSecond: usageTokens ? usageTokens / Math.max(totalLatencyMs / 1000, 0.001) : undefined
       },
       assertions,
+      retestRecommendation,
       evidenceSummary: {
         redaction: "applied",
         requestBodyStored: false,
@@ -134,6 +139,9 @@ async function executeSuite(input: SmokeAuditInput, suite: AuditSuiteDefinition)
         suiteId: suite.suiteId,
         suiteVersion: suite.suiteVersion,
         promptNonceHash: await sha256(materialized.nonce),
+        numericNonceHash: await sha256(String(materialized.numericNonce)),
+        timestampBucket: materialized.timestampBucket,
+        retestRecommendation,
         requestMetadata: {
           method: "POST",
           targetHostHash: await sha256(url.host),
@@ -186,90 +194,19 @@ async function executeSuite(input: SmokeAuditInput, suite: AuditSuiteDefinition)
   }
 }
 
-function materializeSuitePrompt(suiteId: AuditSuiteId, fixedNonce?: string) {
-  const nonce = fixedNonce ?? crypto.randomUUID();
-  const numericNonce = 7919;
-  if (suiteId === "reasoning-lite") {
-    return {
-      nonce,
-      expected: { answer: String(17 * 23 + numericNonce) },
-      messages: [
-        { role: "system", content: "You are responding to a ModelTruth reasoning-lite audit. Return concise JSON only." },
-        {
-          role: "user",
-          content: `Nonce ${nonce}. Compute 17 * 23 + ${numericNonce}. Return {"answer":"<number>","nonce":"${nonce}"}.`
-        }
-      ]
-    };
-  }
-  if (suiteId === "context-lite") {
-    const needles = [
-      `needle_alpha=${nonce.slice(0, 8)}`,
-      `needle_beta=${nonce.slice(9, 17)}`,
-      `needle_gamma=${nonce.slice(18, 26)}`
-    ];
-    const filler = "ModelTruth synthetic context line. ".repeat(180);
-    return {
-      nonce,
-      expected: { needles },
-      messages: [
-        { role: "system", content: "You are responding to a ModelTruth context-lite audit. Return concise JSON only." },
-        {
-          role: "user",
-          content: `${filler}${needles[0]}\n${filler}${needles[1]}\n${filler}${needles[2]}\nReturn all three needle values and nonce ${nonce}.`
-        }
-      ]
-    };
-  }
-  if (suiteId === "billing-lite") {
-    return {
-      nonce,
-      expected: {},
-      messages: [
-        { role: "system", content: "You are responding to a ModelTruth billing-lite audit." },
-        {
-          role: "user",
-          content: `Nonce ${nonce}. Reply with a short sentence containing the nonce. This run compares usage metadata with billing data when a balance source is configured.`
-        }
-      ]
-    };
-  }
-  if (suiteId === "fingerprint-calibration") {
-    return {
-      nonce,
-      expected: {},
-      messages: [
-        { role: "system", content: "You are responding to a ModelTruth fingerprint calibration audit." },
-        {
-          role: "user",
-          content: `Nonce ${nonce}. Return concise JSON with keys model_family, capabilities, and nonce.`
-        }
-      ]
-    };
-  }
-  return {
-    nonce,
-    expected: {},
-    messages: [
-      { role: "system", content: "You are responding to a ModelTruth smoke audit." },
-      { role: "user", content: `Reply with exactly: modeltruth-smoke-${nonce}` }
-    ]
-  };
-}
-
 async function evaluateAssertions(input: {
   suiteId: AuditSuiteId;
   statusCode: number;
   completion?: string;
   usage: unknown;
-  materialized: ReturnType<typeof materializeSuitePrompt>;
+  materialized: MaterializedPrompt;
   modelProfile?: ModelCapabilityProfile;
   billingSnapshot?: BillingSnapshot;
 }) {
   const assertions = [
     {
       id: "HTTP_STATUS_OK",
-      status: input.statusCode >= 200 && input.statusCode < 300 ? "pass" : ("fail" as AuditStatus),
+      status: availabilityStatus(input.statusCode),
       confidence: 1,
       message: `Endpoint returned HTTP ${input.statusCode}`
     },
@@ -300,7 +237,14 @@ async function evaluateAssertions(input: {
   if (input.suiteId === "billing-lite") {
     assertions.push(evaluateBillingVarianceAssertion(input.billingSnapshot));
   }
-  return assertions;
+  return assertions.map(withAssertionWeight);
+}
+
+function availabilityStatus(statusCode: number): AuditStatus {
+  if (statusCode === 401 || statusCode === 403) return "error";
+  if (statusCode === 429 || statusCode >= 500) return "warning";
+  if (statusCode >= 200 && statusCode < 300) return "pass";
+  return "inconclusive";
 }
 
 function evaluateBillingVarianceAssertion(snapshot: BillingSnapshot | undefined) {
@@ -346,7 +290,7 @@ function evaluateModelRegistry(profile: ModelCapabilityProfile) {
   };
 }
 
-function evaluateReasoning(completion: string | undefined, materialized: ReturnType<typeof materializeSuitePrompt>) {
+function evaluateReasoning(completion: string | undefined, materialized: MaterializedPrompt) {
   const expected = materialized.expected as { answer?: string };
   const pass = Boolean(completion?.includes(expected.answer ?? "") && completion.includes(materialized.nonce));
   return {
@@ -357,7 +301,7 @@ function evaluateReasoning(completion: string | undefined, materialized: ReturnT
   };
 }
 
-function evaluateContext(completion: string | undefined, materialized: ReturnType<typeof materializeSuitePrompt>) {
+function evaluateContext(completion: string | undefined, materialized: MaterializedPrompt) {
   const needles = ((materialized.expected as { needles?: string[] }).needles ?? []);
   const matches = needles.filter((needle) => completion?.includes(needle)).length;
   return {
@@ -366,19 +310,6 @@ function evaluateContext(completion: string | undefined, materialized: ReturnTyp
     confidence: matches === needles.length ? 0.84 : 0.7,
     message: `Context-lite retrieved ${matches}/${needles.length} synthetic needles`
   };
-}
-
-function aggregateStatus(assertions: Array<{ status: AuditStatus }>): AuditStatus {
-  if (assertions.some((assertion) => assertion.status === "fail")) return "fail";
-  if (assertions.some((assertion) => assertion.status === "error")) return "error";
-  if (assertions.some((assertion) => assertion.status === "warning")) return "warning";
-  if (assertions.every((assertion) => assertion.status === "inconclusive")) return "inconclusive";
-  return assertions.some((assertion) => assertion.status === "inconclusive") ? "warning" : "pass";
-}
-
-function aggregateConfidence(assertions: Array<{ confidence: number }>) {
-  if (assertions.length === 0) return 0;
-  return Math.round((assertions.reduce((sum, assertion) => sum + assertion.confidence, 0) / assertions.length) * 100) / 100;
 }
 
 function validateBaseUrl(baseUrl: string): URL {
@@ -433,11 +364,13 @@ function buildResult(
     confidence,
     metrics: { totalLatencyMs: Date.now() - startedAt },
     assertions: [{ id, status, confidence, message }],
+    retestRecommendation: status === "error" ? "manual_retest_recommended" : "none",
     evidenceSummary: {
       redaction: "applied",
       requestBodyStored: false,
       suiteId: suite.suiteId,
       suiteVersion: suite.suiteVersion,
+      retestRecommendation: status === "error" ? "manual_retest_recommended" : "none",
       traceparent: buildTraceparent(traceId),
       openInference: {
         "openinference.span.kind": "LLM",

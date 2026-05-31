@@ -61,9 +61,27 @@ function consecutiveDeepAuditFailRule(input: AlertRuleInput, runs: AuditRunListI
     .filter((run) => run.runType === "deepAudit")
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 2);
-  return latest.length === 2 && latest.every((run) => run.status === "fail")
+  return latest.length === 2 && latest.every(isDeepAuditFailure)
     ? { rule: "deep_audit_consecutive_fail", status: "fail", message: `2 consecutive deep audits failed for ${input.targetModelId}` }
     : undefined;
+}
+
+function isDeepAuditFailure(run: AuditRunListItem) {
+  return run.status === "fail" || run.status === "error" || hasFailingAssertion(run) || hasFailingStatusCode(run);
+}
+
+function hasFailingAssertion(run: AuditRunListItem) {
+  if (!Array.isArray(run.assertions)) return false;
+  return run.assertions.some((assertion) => {
+    if (!assertion || typeof assertion !== "object" || Array.isArray(assertion)) return false;
+    const record = assertion as Record<string, unknown>;
+    return record.status === "fail" || record.status === "error";
+  });
+}
+
+function hasFailingStatusCode(run: AuditRunListItem) {
+  const statusCode = metricNumber(run.metrics, "statusCode");
+  return statusCode === 401 || statusCode === 403 || (typeof statusCode === "number" && statusCode >= 500);
 }
 
 function billingRetestVarianceRule(input: AlertRuleInput): AlertRuleMatch | undefined {
@@ -92,6 +110,7 @@ function currentRun(input: AlertRuleInput, now: Date): AuditRunListItem {
     status: input.result.overallStatus,
     confidence: input.result.confidence,
     metrics: input.result.metrics,
+    assertions: input.result.assertions,
     evidenceSummary: input.result.evidenceSummary,
     createdAt: now.toISOString()
   };

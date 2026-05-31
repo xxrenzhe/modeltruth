@@ -146,7 +146,8 @@ describe("runSmokeAudit", () => {
         )
     });
 
-    expect(result.overallStatus).toBe("fail");
+    expect(result.overallStatus).toBe("warning");
+    expect(result.retestRecommendation).toBe("manual_retest_recommended");
     expect(result.evidenceSummary.errorCode).toBe("rate_limit_exceeded");
     expect(result.evidenceSummary.errorType).toBe("rate_limit_error");
     expect(result.evidenceSummary.responseMetadata).toMatchObject({
@@ -185,13 +186,14 @@ describe("runSmokeAudit", () => {
       fetchImpl: async (_url, init) => {
         const body = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
         const prompt = body.messages.at(-1)?.content ?? "";
-        const nonce = prompt.match(/Nonce ([0-9a-f-]+)/)?.[1];
+        const nonce = prompt.match(/session_nonce=([0-9a-f-]+)/)?.[1];
+        const numericNonce = Number(prompt.match(/17 \* 23 \+ (\d+)/)?.[1]);
         expect(nonce).toBeTruthy();
         capturedNonce = nonce ?? "";
         return new Response(
           JSON.stringify({
             model: "gpt-5.1",
-            choices: [{ message: { content: JSON.stringify({ answer: "8310", nonce }) } }],
+            choices: [{ message: { content: JSON.stringify({ answer: String(17 * 23 + numericNonce), session_nonce: nonce }) } }],
             usage: { prompt_tokens: 30, completion_tokens: 12, total_tokens: 42 }
           }),
           { status: 200, headers: { "content-type": "application/json" } }
@@ -201,6 +203,9 @@ describe("runSmokeAudit", () => {
 
     expect(result.overallStatus).toBe("pass");
     expect(result.assertions.find((assertion) => assertion.id === "REASONING_FINAL_ANSWER")?.status).toBe("pass");
+    expect(result.assertions.find((assertion) => assertion.id === "REASONING_FINAL_ANSWER")?.weight).toBe(0.25);
+    expect(result.evidenceSummary.numericNonceHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.evidenceSummary.timestampBucket).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z$/);
     expect(JSON.stringify(result)).not.toContain(capturedNonce);
   });
 
@@ -214,6 +219,10 @@ describe("runSmokeAudit", () => {
         const body = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
         const prompt = body.messages.at(-1)?.content ?? "";
         const needles = [...prompt.matchAll(/needle_[a-z]+=[0-9a-f-]+/g)].map((match) => match[0]);
+        expect(prompt).toContain("session_nonce=");
+        expect(prompt).toContain("numeric_nonce=");
+        expect(prompt).toContain("timestamp_bucket=");
+        expect(prompt.split(/\s+/).length).toBeGreaterThan(8_000);
         return new Response(
           JSON.stringify({
             choices: [{ message: { content: needles.join(" ") } }],
@@ -226,6 +235,12 @@ describe("runSmokeAudit", () => {
 
     expect(result.overallStatus).toBe("pass");
     expect(result.assertions.find((assertion) => assertion.id === "CONTEXT_NEEDLE_RETRIEVAL")?.message).toContain("3/3");
+    expect(result.evidenceSummary.promptDiffSummary).toMatchObject({
+      contextTokenEstimate: expect.any(Number),
+      needleDepths: expect.arrayContaining([expect.any(Number)]),
+      numericNoncePresent: true,
+      timestampBucketPresent: true
+    });
   });
 
   it("runs billing-lite but marks billing variance inconclusive without a balance source", async () => {
@@ -237,7 +252,7 @@ describe("runSmokeAudit", () => {
       fetchImpl: async (_url, init) => {
         const body = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
         const prompt = body.messages.at(-1)?.content ?? "";
-        const nonce = prompt.match(/Nonce ([0-9a-f-]+)/)?.[1];
+        const nonce = prompt.match(/session_nonce=([0-9a-f-]+)/)?.[1];
         return new Response(
           JSON.stringify({
             choices: [{ message: { content: `ok ${nonce}` } }],
@@ -273,10 +288,12 @@ describe("runSmokeAudit", () => {
         )
     });
 
-    expect(result.overallStatus).toBe("fail");
+    expect(result.overallStatus).toBe("warning");
+    expect(result.retestRecommendation).toBe("automatic_retest_required");
     expect(result.assertions.find((assertion) => assertion.id === "BILLING_VARIANCE")?.status).toBe("fail");
     expect(result.metrics.billingVariance).toMatchObject({ status: "fail", retestRequired: true, direction: "overcharged" });
     expect(result.evidenceSummary.billingVariance).toMatchObject({ varianceRatio: 0.2, retestRequired: true });
+    expect(result.evidenceSummary.retestRecommendation).toBe("automatic_retest_required");
   });
 
   it("warns billing-lite when variance is between 5 and 15 percent", async () => {
@@ -304,6 +321,21 @@ describe("runSmokeAudit", () => {
     expect(result.metrics.billingVariance).toMatchObject({ status: "warning", retestRequired: false });
   });
 
+  it("marks credential rejection as a P0 error", async () => {
+    const result = await runSmokeAudit({
+      baseUrl: "https://api.example.com/v1",
+      apiKey: "sk-test-secret",
+      model: "gpt-5.1",
+      suiteId: "smoke@1.0.0",
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ error: { code: "invalid_api_key", type: "authentication_error" } }), { status: 401 })
+    });
+
+    expect(result.overallStatus).toBe("error");
+    expect(result.assertions.find((assertion) => assertion.id === "HTTP_STATUS_OK")?.status).toBe("error");
+    expect(result.retestRecommendation).toBe("manual_retest_recommended");
+  });
+
   it("runs the internal fingerprint calibration suite as a registered versioned suite", async () => {
     const result = await runSmokeAudit({
       baseUrl: "https://api.example.com/v1",
@@ -313,7 +345,7 @@ describe("runSmokeAudit", () => {
       fetchImpl: async (_url, init) => {
         const body = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
         const prompt = body.messages.at(-1)?.content ?? "";
-        const nonce = prompt.match(/Nonce ([0-9a-f-]+)/)?.[1];
+        const nonce = prompt.match(/session_nonce=([0-9a-f-]+)/)?.[1];
         return new Response(
           JSON.stringify({
             choices: [{ message: { content: JSON.stringify({ model_family: "gpt-5", capabilities: ["reasoning"], nonce }) } }],
@@ -347,10 +379,11 @@ describe("runSmokeAudit", () => {
       fetchImpl: async (_url, init) => {
         const body = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
         const prompt = body.messages.at(-1)?.content ?? "";
-        const nonce = prompt.match(/Nonce ([0-9a-f-]+)/)?.[1];
+        const nonce = prompt.match(/session_nonce=([0-9a-f-]+)/)?.[1];
+        const numericNonce = Number(prompt.match(/17 \* 23 \+ (\d+)/)?.[1]);
         return new Response(
           JSON.stringify({
-            choices: [{ message: { content: JSON.stringify({ answer: "8310", nonce }) } }]
+            choices: [{ message: { content: JSON.stringify({ answer: String(17 * 23 + numericNonce), session_nonce: nonce }) } }]
           }),
           { status: 200 }
         );

@@ -1,10 +1,5 @@
-import type { AuditSuiteId } from "./index";
-
-export type MaterializedPrompt = {
-  nonce: string;
-  expected: Record<string, unknown>;
-  messages: Array<{ role: string; content: string }>;
-};
+import type { MaterializedPrompt } from "./prompt-materialization";
+import type { AuditSuiteId } from "./types";
 
 export function httpMetadata(value: unknown) {
   const record = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -44,6 +39,11 @@ export async function promptDiffSummary(suiteId: AuditSuiteId, materialized: Mat
     messageCount: materialized.messages.length,
     promptLength: userPrompt.length,
     expectedKeys: Object.keys(materialized.expected),
+    contextTokenEstimate:
+      typeof materialized.expected.contextTokenEstimate === "number" ? materialized.expected.contextTokenEstimate : undefined,
+    needleDepths: Array.isArray(materialized.expected.needleDepths) ? materialized.expected.needleDepths : undefined,
+    numericNoncePresent: Number.isFinite(materialized.numericNonce),
+    timestampBucketPresent: Boolean(materialized.timestampBucket),
     syntheticNonceHashStored: true
   };
 }
