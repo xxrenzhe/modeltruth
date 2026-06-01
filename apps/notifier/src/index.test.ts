@@ -200,7 +200,9 @@ describe("deliverAlert", () => {
 
   it("delivers provider digest emails through the configured email webhook", async () => {
     const previousWebhook = process.env.EMAIL_ALERT_WEBHOOK_URL;
+    const previousSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
     process.env.EMAIL_ALERT_WEBHOOK_URL = "https://email.example.com/send";
+    process.env.NEXT_PUBLIC_SITE_URL = "https://app.modeltruth.example";
     const calls: Array<{ url: string; body?: string }> = [];
 
     const delivered = await deliverProviderDigest(
@@ -224,12 +226,16 @@ describe("deliverAlert", () => {
 
     if (previousWebhook === undefined) delete process.env.EMAIL_ALERT_WEBHOOK_URL;
     else process.env.EMAIL_ALERT_WEBHOOK_URL = previousWebhook;
+    if (previousSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
+    else process.env.NEXT_PUBLIC_SITE_URL = previousSiteUrl;
 
     expect(delivered).toBe(2);
     expect(calls.map((call) => call.url)).toEqual(["https://email.example.com/send", "https://email.example.com/send"]);
     expect(calls[0].body).toContain("weekly@example.com");
     expect(calls[0].body).toContain("ModelTruth Weekly Provider Digest: OpenRouter");
     expect(calls[0].body).toContain("not legal conclusions");
+    expect(calls[0].body).toContain("https://app.modeltruth.example/api/providers/unsubscribe");
+    expect(calls[0].body).toContain("notificationType=weekly_digest");
     expect(calls[0].body).not.toContain("ops@example.com");
   });
 });

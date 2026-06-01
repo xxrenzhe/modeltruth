@@ -160,9 +160,10 @@ function formatProviderDigestBody(payload: ProviderDigestPayload, email: string)
     `Audit pass rate: ${formatPercent(payload.auditPassRate)}`,
     `Risk flags: ${payload.riskFlagCount ?? 0}`,
     `Evidence score: ${payload.evidenceScore ?? 0}`,
-    "Results are automated technical signals, not legal conclusions."
+    "Results are automated technical signals, not legal conclusions.",
+    `Unsubscribe: ${providerUnsubscribeUrl(payload, email)}`
   ].join("\n");
-  return { to: email, subject, text, modeltruth: { ...payload, subscriberEmails: undefined } };
+  return { to: email, subject, text, modeltruth: { ...payload, subscriberEmails: undefined, unsubscribeUrl: providerUnsubscribeUrl(payload, email) } };
 }
 
 function formatPercent(value: number | undefined) {
@@ -189,6 +190,18 @@ function emailWebhookUrl() {
   const url = process.env.EMAIL_ALERT_WEBHOOK_URL;
   if (!url) throw new Error("EMAIL_ALERT_WEBHOOK_URL is required for email alert channels");
   return url;
+}
+
+function providerUnsubscribeUrl(payload: ProviderDigestPayload, email: string) {
+  const url = new URL("/api/providers/unsubscribe", publicAppUrl());
+  url.searchParams.set("providerSlug", payload.providerSlug);
+  url.searchParams.set("email", email);
+  url.searchParams.set("notificationType", payload.notificationType);
+  return url.toString();
+}
+
+function publicAppUrl() {
+  return (process.env.NEXT_PUBLIC_SITE_URL ?? process.env.PUBLIC_APP_URL ?? "https://modeltruth.ai").replace(/\/$/, "");
 }
 
 async function main() {

@@ -44,7 +44,7 @@ class SqliteBillingRepository implements BillingRepository {
 
   async updateWorkspaceBilling(input: UpdateWorkspaceBillingInput): Promise<void> {
     const now = new Date().toISOString();
-    const tier = resolveTier(input.subscriptionStatus, input.tier);
+    const tier = resolveTier(input.subscriptionStatus, input.tier, this.currentTier(input));
     if (input.workspaceId) {
       this.db
         .prepare(
@@ -92,6 +92,17 @@ class SqliteBillingRepository implements BillingRepository {
   async close(): Promise<void> {
     this.db.close();
   }
+
+  private currentTier(input: UpdateWorkspaceBillingInput): string {
+    if (input.workspaceId) {
+      const row = this.db.prepare("select tier from workspaces where id = ? limit 1").get(input.workspaceId) as { tier?: string } | undefined;
+      return row?.tier ?? "free";
+    }
+    const row = this.db
+      .prepare("select tier from workspaces where stripe_subscription_id = ? or stripe_customer_id = ? limit 1")
+      .get(input.stripeSubscriptionId ?? "", input.stripeCustomerId ?? "") as { tier?: string } | undefined;
+    return row?.tier ?? "free";
+  }
 }
 
 class PostgresBillingRepository implements BillingRepository {
@@ -107,7 +118,7 @@ class PostgresBillingRepository implements BillingRepository {
   }
 
   async updateWorkspaceBilling(input: UpdateWorkspaceBillingInput): Promise<void> {
-    const tier = resolveTier(input.subscriptionStatus, input.tier);
+    const tier = resolveTier(input.subscriptionStatus, input.tier, await this.currentTier(input));
     if (input.workspaceId) {
       await this.sql`
         update workspaces
@@ -141,6 +152,19 @@ class PostgresBillingRepository implements BillingRepository {
   async close(): Promise<void> {
     await this.sql.end();
   }
+
+  private async currentTier(input: UpdateWorkspaceBillingInput): Promise<string> {
+    if (input.workspaceId) {
+      const rows = await this.sql<{ tier?: string }[]>`select tier from workspaces where id = ${input.workspaceId} limit 1`;
+      return rows[0]?.tier ?? "free";
+    }
+    const rows = await this.sql<{ tier?: string }[]>`
+      select tier from workspaces
+      where stripe_subscription_id = ${input.stripeSubscriptionId ?? ""} or stripe_customer_id = ${input.stripeCustomerId ?? ""}
+      limit 1
+    `;
+    return rows[0]?.tier ?? "free";
+  }
 }
 
 interface WorkspaceBillingRow {
@@ -161,8 +185,10 @@ function mapBillingRow(row: WorkspaceBillingRow): WorkspaceBilling {
   };
 }
 
-function resolveTier(status: string, tier = "free") {
-  if (status === "active" || status === "trialing") return tier;
+function resolveTier(status: string, tier = "free", currentTier = "free") {
+  if (status !== "active" && status !== "trialing") return "free";
+  if (tier === "pro" || tier === "team") return tier;
+  if (currentTier === "pro" || currentTier === "team") return currentTier;
   return "free";
 }
 

@@ -22,6 +22,7 @@ const publicRoutes = new Set([
   "health/route.ts",
   "playground/audit/route.ts",
   "providers/subscribe/route.ts",
+  "providers/unsubscribe/route.ts",
   "waitlist/route.ts"
 ]);
 const protectionPatterns = [

@@ -42,8 +42,9 @@ function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value ? value : undefined;
 }
 
-function normalizeTier(value: string | undefined): string {
-  return value === "team" ? "team" : "pro";
+function normalizeTier(value: string | undefined): string | undefined {
+  if (value === "pro" || value === "team") return value;
+  return undefined;
 }
 
 function metadataValue(object: Record<string, unknown>, key: string): string | undefined {

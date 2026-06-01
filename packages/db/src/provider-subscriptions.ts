@@ -22,6 +22,7 @@ export interface CreateProviderSubscriptionInput {
 
 export interface ProviderSubscriptionRepository {
   create(input: CreateProviderSubscriptionInput): Promise<ProviderSubscriptionRecord>;
+  unsubscribe(input: CreateProviderSubscriptionInput): Promise<ProviderSubscriptionRecord | undefined>;
   listByProvider(providerSlug: string): Promise<ProviderSubscriptionRecord[]>;
   listByProviderAndType(providerSlug: string, notificationType: ProviderNotificationType): Promise<ProviderSubscriptionRecord[]>;
   listByEmail(email: string): Promise<ProviderSubscriptionRecord[]>;
@@ -54,6 +55,19 @@ class SqliteProviderSubscriptionRepository implements ProviderSubscriptionReposi
     )!;
   }
 
+  async unsubscribe(input: CreateProviderSubscriptionInput): Promise<ProviderSubscriptionRecord | undefined> {
+    const notificationType = input.notificationType ?? "risk_trend";
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `update provider_subscriptions
+         set status = 'unsubscribed', updated_at = ?
+         where provider_slug = ? and email = ? and notification_type = ?`
+      )
+      .run(now, input.providerSlug, input.email, notificationType);
+    return this.findAny(input.providerSlug, input.email, notificationType);
+  }
+
   async listByProvider(providerSlug: string): Promise<ProviderSubscriptionRecord[]> {
     const rows = this.db
       .prepare("select * from provider_subscriptions where provider_slug = ? and status = 'active' order by created_at desc")
@@ -82,6 +96,13 @@ class SqliteProviderSubscriptionRepository implements ProviderSubscriptionReposi
   async close(): Promise<void> {
     this.db.close();
   }
+
+  private findAny(providerSlug: string, email: string, notificationType: ProviderNotificationType): ProviderSubscriptionRecord | undefined {
+    const row = this.db
+      .prepare("select * from provider_subscriptions where provider_slug = ? and email = ? and notification_type = ? limit 1")
+      .get(providerSlug, email, notificationType) as ProviderSubscriptionRow | undefined;
+    return row ? mapRow(row) : undefined;
+  }
 }
 
 class PostgresProviderSubscriptionRepository implements ProviderSubscriptionRepository {
@@ -103,6 +124,18 @@ class PostgresProviderSubscriptionRepository implements ProviderSubscriptionRepo
     return (await this.listByProvider(input.providerSlug)).find(
       (item) => item.email === input.email && item.notificationType === notificationType
     )!;
+  }
+
+  async unsubscribe(input: CreateProviderSubscriptionInput): Promise<ProviderSubscriptionRecord | undefined> {
+    const notificationType = input.notificationType ?? "risk_trend";
+    const now = new Date().toISOString();
+    const rows = await this.sql<ProviderSubscriptionRow[]>`
+      update provider_subscriptions
+      set status = 'unsubscribed', updated_at = ${now}
+      where provider_slug = ${input.providerSlug} and email = ${input.email} and notification_type = ${notificationType}
+      returning *
+    `;
+    return rows[0] ? mapRow(rows[0]) : undefined;
   }
 
   async listByProvider(providerSlug: string): Promise<ProviderSubscriptionRecord[]> {

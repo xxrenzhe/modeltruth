@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createProviderSubscriptionRepository, ensureSqliteReady } from "@modeltruth/db";
 import { POST } from "./app/api/providers/subscribe/route";
+import { GET as unsubscribeGet, POST as unsubscribe } from "./app/api/providers/unsubscribe/route";
 
 let previousDatabasePath: string | undefined;
 let tempDir: string | undefined;
@@ -62,6 +63,47 @@ describe("provider subscribe API", () => {
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "providerSlug is not supported" });
+    expect(subscriptions).toHaveLength(0);
+  });
+
+  it("unsubscribes provider notification types without exposing subscriber email", async () => {
+    await setupDatabase();
+    const repo = await createProviderSubscriptionRepository();
+    await repo.create({ providerSlug: "openrouter", email: "dev@example.com", notificationType: "risk_trend" });
+    await repo.create({ providerSlug: "openrouter", email: "dev@example.com", notificationType: "weekly_digest" });
+    await repo.close();
+
+    const response = await unsubscribe(jsonRequest({ providerSlug: "openrouter", email: "Dev@Example.com", notificationType: "risk_trend" }));
+    const body = await response.json();
+    const check = await createProviderSubscriptionRepository();
+    const subscriptions = await check.listByEmail("dev@example.com");
+    await check.close();
+
+    expect(response.status).toBe(200);
+    expect(body.subscription).toEqual({ providerSlug: "openrouter", notificationType: "risk_trend", status: "unsubscribed" });
+    expect(JSON.stringify(body)).not.toContain("dev@example.com");
+    expect(subscriptions).toHaveLength(1);
+    expect(subscriptions[0].notificationType).toBe("weekly_digest");
+  });
+
+  it("supports one-click GET unsubscribe links from provider digest emails", async () => {
+    await setupDatabase();
+    const repo = await createProviderSubscriptionRepository();
+    await repo.create({ providerSlug: "openrouter", email: "digest@example.com", notificationType: "weekly_digest" });
+    await repo.close();
+
+    const response = await unsubscribeGet(
+      new Request(
+        "http://localhost/api/providers/unsubscribe?providerSlug=openrouter&email=digest%40example.com&notificationType=weekly_digest"
+      )
+    );
+    const body = await response.json();
+    const check = await createProviderSubscriptionRepository();
+    const subscriptions = await check.listByEmail("digest@example.com");
+    await check.close();
+
+    expect(response.status).toBe(200);
+    expect(body.subscription).toEqual({ providerSlug: "openrouter", notificationType: "weekly_digest", status: "unsubscribed" });
     expect(subscriptions).toHaveLength(0);
   });
 });

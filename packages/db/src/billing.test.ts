@@ -36,6 +36,27 @@ describe("BillingRepository", () => {
       tier: "pro"
     });
     const canceled = await billing.getWorkspaceBilling(session!.session.workspace.id);
+    await billing.updateWorkspaceBilling({
+      workspaceId: session!.session.workspace.id,
+      stripeCustomerId: "cus_123",
+      stripeSubscriptionId: "sub_123",
+      subscriptionStatus: "active",
+      tier: "enterprise"
+    });
+    const unsupportedTier = await billing.getWorkspaceBilling(session!.session.workspace.id);
+    await billing.updateWorkspaceBilling({
+      workspaceId: session!.session.workspace.id,
+      stripeCustomerId: "cus_123",
+      stripeSubscriptionId: "sub_123",
+      subscriptionStatus: "active",
+      tier: "team"
+    });
+    await billing.updateWorkspaceBilling({
+      stripeCustomerId: "cus_123",
+      stripeSubscriptionId: "sub_123",
+      subscriptionStatus: "active"
+    });
+    const retainedTier = await billing.getWorkspaceBilling(session!.session.workspace.id);
     await billing.close();
 
     if (previousPath === undefined) delete process.env.DATABASE_PATH;
@@ -48,5 +69,9 @@ describe("BillingRepository", () => {
     expect(active?.subscriptionStatus).toBe("active");
     expect(canceled?.tier).toBe("free");
     expect(canceled?.subscriptionStatus).toBe("canceled");
+    expect(unsupportedTier?.tier).toBe("free");
+    expect(unsupportedTier?.subscriptionStatus).toBe("active");
+    expect(retainedTier?.tier).toBe("team");
+    expect(retainedTier?.subscriptionStatus).toBe("active");
   });
 });

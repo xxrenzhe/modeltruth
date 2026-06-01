@@ -43,6 +43,21 @@ describe("processStripeEvent", () => {
     ]);
   });
 
+  it("does not turn missing or unsupported Stripe metadata tiers into paid access", async () => {
+    const updates: unknown[] = [];
+    const update = async (input: unknown) => {
+      updates.push(input);
+    };
+
+    await processStripeEvent(event("checkout.session.completed", { client_reference_id: "ws_1", customer: "cus_1", subscription: "sub_1" }), update);
+    await processStripeEvent(event("customer.subscription.updated", { id: "sub_1", customer: "cus_1", status: "active", metadata: { tier: "enterprise" } }), update);
+
+    expect(updates).toEqual([
+      { workspaceId: "ws_1", stripeCustomerId: "cus_1", stripeSubscriptionId: "sub_1", subscriptionStatus: "active", tier: undefined },
+      { stripeCustomerId: "cus_1", stripeSubscriptionId: "sub_1", subscriptionStatus: "active", tier: undefined }
+    ]);
+  });
+
   it("deduplicates repeated signed webhook deliveries at the API route", async () => {
     const { workspaceId } = await createBillingHarness();
     const rawBody = JSON.stringify(
@@ -125,6 +140,52 @@ describe("processStripeEvent", () => {
       })
     );
     await expectWorkspaceBilling(workspaceId, { tier: "free", subscriptionStatus: "past_due" });
+  });
+
+  it("keeps paid access constrained to supported Stripe metadata tiers at the API route", async () => {
+    const { workspaceId } = await createBillingHarness();
+
+    await postSignedEvent(
+      event("checkout.session.completed", {
+        client_reference_id: workspaceId,
+        customer: "cus_unknown",
+        subscription: "sub_unknown",
+        metadata: { tier: "enterprise" }
+      })
+    );
+    await expectWorkspaceBilling(workspaceId, { tier: "free", subscriptionStatus: "active" });
+
+    await postSignedEvent(
+      event("customer.subscription.updated", {
+        id: "sub_unknown",
+        customer: "cus_unknown",
+        status: "trialing",
+        metadata: { tier: "team" }
+      })
+    );
+    await expectWorkspaceBilling(workspaceId, { tier: "team", subscriptionStatus: "trialing" });
+  });
+
+  it("does not downgrade an existing paid tier when Stripe omits tier metadata on renewal", async () => {
+    const { workspaceId } = await createBillingHarness();
+
+    await postSignedEvent(
+      event("checkout.session.completed", {
+        client_reference_id: workspaceId,
+        customer: "cus_renewal",
+        subscription: "sub_renewal",
+        metadata: { tier: "team" }
+      })
+    );
+    await postSignedEvent(
+      event("invoice.paid", {
+        customer: "cus_renewal",
+        subscription: "sub_renewal",
+        subscription_details: { metadata: { workspaceId } }
+      })
+    );
+
+    await expectWorkspaceBilling(workspaceId, { tier: "team", subscriptionStatus: "active" });
   });
 });
 
