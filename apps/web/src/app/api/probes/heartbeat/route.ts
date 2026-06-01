@@ -1,21 +1,26 @@
 import { NextResponse } from "next/server";
 import { createByoProbeRepository, createProviderNodeRepository, saveAuditRun } from "@modeltruth/db";
 import { redactSecrets } from "@modeltruth/crypto";
+import { safeErrorMessage } from "@modeltruth/shared";
 
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => ({}));
-  const bearer = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
-  const token = String(bearer ?? body.token ?? "");
-  if (!token.startsWith("mtp_")) return NextResponse.json({ error: "probe token is required" }, { status: 401 });
-
-  const repo = await createByoProbeRepository();
   try {
-    const probe = await repo.heartbeat({ token, version: typeof body.version === "string" ? body.version : undefined });
-    if (!probe) return NextResponse.json({ error: "probe token not found" }, { status: 404 });
-    if (body.result && typeof body.result === "object") await saveProbeResult(probe, body.result as Record<string, unknown>);
-    return NextResponse.json({ ok: true, probe, targets: await probeTargets(probe.workspaceId) });
-  } finally {
-    await repo.close();
+    const body = await request.json().catch(() => ({}));
+    const bearer = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
+    const token = String(bearer ?? body.token ?? "");
+    if (!token.startsWith("mtp_")) return NextResponse.json({ error: "probe token is required" }, { status: 401 });
+
+    const repo = await createByoProbeRepository();
+    try {
+      const probe = await repo.heartbeat({ token, version: typeof body.version === "string" ? body.version : undefined });
+      if (!probe) return NextResponse.json({ error: "probe token not found" }, { status: 404 });
+      if (body.result && typeof body.result === "object") await saveProbeResult(probe, body.result as Record<string, unknown>);
+      return NextResponse.json({ ok: true, probe, targets: await probeTargets(probe.workspaceId) });
+    } finally {
+      await repo.close();
+    }
+  } catch (error) {
+    return NextResponse.json({ error: safeErrorMessage(error, "invalid probe heartbeat") }, { status: 400 });
   }
 }
 

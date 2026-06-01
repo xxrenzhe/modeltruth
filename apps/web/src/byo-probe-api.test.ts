@@ -110,6 +110,38 @@ describe("BYO probe API", () => {
     expect(response.status).toBe(403);
     expect(body.error).toBe("BYO probe registration requires a Team subscription");
   });
+
+  it("rejects probe results for nodes outside the probe workspace without saving evidence", async () => {
+    await createSession("team");
+    const registered = await registerProbe(jsonRequest({ name: "Boundary Probe", region: "us-east-1" }));
+    const registeredBody = await registered.json();
+    const otherWorkspaceId = await createWorkspaceOnly("probe-other-workspace@example.com");
+    const otherNode = await createNodeForWorkspace(otherWorkspaceId);
+
+    const response = await heartbeatProbe(
+      new Request("http://localhost/api/probes/heartbeat", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${registeredBody.token}` },
+        body: JSON.stringify({
+          result: {
+            runId: "probe_cross_workspace_run",
+            nodeId: otherNode.id,
+            modelId: "gpt-5.1",
+            status: "warning",
+            metrics: { statusCode: 200 },
+            assertions: [],
+            evidenceSummary: { completionHash: "hash" }
+          }
+        })
+      })
+    );
+    const body = await response.json();
+    const evidence = await getEvidencePackage("probe_cross_workspace_run");
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("probe result nodeId is not registered for this workspace");
+    expect(evidence).toBeUndefined();
+  });
 });
 
 async function createSession(tier: "pro" | "team") {
@@ -152,6 +184,17 @@ async function createNodeForWorkspace(workspaceId: string) {
     });
   } finally {
     await repo.close();
+  }
+}
+
+async function createWorkspaceOnly(email: string) {
+  const auth = await createAuthRepository();
+  try {
+    const login = await auth.consumeMagicLink((await auth.createMagicLink(email)).token);
+    if (!login) throw new Error("failed to create secondary workspace");
+    return login.session.workspace.id;
+  } finally {
+    await auth.close();
   }
 }
 
