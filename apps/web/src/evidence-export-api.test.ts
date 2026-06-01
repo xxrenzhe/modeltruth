@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthRepository, ensureSqliteReady, getEvidencePackage, saveAuditRun } from "@modeltruth/db";
 import { GET as listEvidence } from "./app/api/evidence/route";
 import { DELETE as deleteEvidence, GET as exportEvidence } from "./app/api/evidence/[runId]/route";
+import { expectResponseKeysCamelCase } from "./test-utils/response-key-case";
 
 const cookieState = vi.hoisted(() => ({ sessionToken: "" }));
 
@@ -50,6 +51,7 @@ describe("Evidence export API", () => {
     const publicBody = await publicResponse.json();
 
     expect(privateResponse.status).toBe(200);
+    expectResponseKeysCamelCase({ privateBody, publicBody });
     expect(privateBody.runs.map((run: { runId: string }) => run.runId)).toContain("run_visible");
     expect(privateBody.runs.map((run: { runId: string }) => run.runId)).not.toContain("run_hidden");
     expect(privateBody.runs[0]).not.toHaveProperty("assertions");
@@ -73,6 +75,7 @@ describe("Evidence export API", () => {
     const serialized = JSON.stringify(body);
 
     expect(response.status).toBe(200);
+    expectResponseKeysCamelCase(body);
     expect(body.evidence).toMatchObject({
       runId: "run_export",
       workspaceId: session.workspace.id,
@@ -101,6 +104,7 @@ describe("Evidence export API", () => {
     const body = await response.json();
 
     expect(response.status).toBe(404);
+    expectResponseKeysCamelCase(body);
     expect(body.error).toBe("evidence not found");
   });
 
@@ -119,6 +123,7 @@ describe("Evidence export API", () => {
 
     expect(forbidden.status).toBe(404);
     expect(deleted.status).toBe(200);
+    expectResponseKeysCamelCase(deletedBody);
     expect(deletedBody).toEqual({ deleted: true, runId: "run_delete" });
     expect(await getEvidencePackage("run_delete")).toBeUndefined();
     expect(await getEvidencePackage("run_delete_other")).toBeTruthy();

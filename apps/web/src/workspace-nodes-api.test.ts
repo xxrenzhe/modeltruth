@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthRepository, createBillingRepository, createJobRepository, createProviderNodeRepository, ensureSqliteReady } from "@modeltruth/db";
 import { decryptSecret } from "@modeltruth/crypto";
 import { DELETE, GET, POST } from "./app/api/workspace/nodes/route";
+import { expectResponseKeysCamelCase } from "./test-utils/response-key-case";
 
 const cookieState = vi.hoisted(() => ({ sessionToken: "" }));
 
@@ -67,6 +68,7 @@ describe("workspace nodes API", () => {
     const serialized = JSON.stringify({ bodies, listBody });
 
     expect(responses.map((response) => response.status)).toEqual([201, 201, 201, 400]);
+    expectResponseKeysCamelCase({ bodies, listBody });
     expect(bodies[0].node).toMatchObject({
       name: "Pro node 0",
       baseUrl: "https://api.example.com/v1",
@@ -114,6 +116,7 @@ describe("workspace nodes API", () => {
     await repo.close();
 
     expect(responses.map((response) => response.status)).toEqual([201, 201, 201, 201]);
+    expectResponseKeysCamelCase({ bodies, deleteBody, listBody });
     expect(bodies[0].node).toMatchObject({ heartbeatIntervalSeconds: 60, deepAuditIntervalSeconds: 21600 });
     expect(deleteResponse.status).toBe(200);
     expect(deleteBody).toMatchObject({ deleted: true, nodeId: bodies[0].node.id });

@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthRepository, createBillingRepository, ensureSqliteReady } from "@modeltruth/db";
 import { GET, POST } from "./app/api/workspace/alert-channels/route";
+import { expectResponseKeysCamelCase } from "./test-utils/response-key-case";
 
 const cookieState = vi.hoisted(() => ({ sessionToken: "" }));
 
@@ -52,11 +53,14 @@ describe("alert channel tier policy", () => {
     const first = await POST(emailAlertRequest("first@example.com"));
     const second = await POST(emailAlertRequest("second@example.com"));
     const third = await POST(emailAlertRequest("third@example.com"));
+    const firstBody = await first.json();
+    const secondBody = await second.json();
     const thirdBody = await third.json();
 
     expect(first.status).toBe(201);
     expect(second.status).toBe(201);
     expect(third.status).toBe(400);
+    expectResponseKeysCamelCase({ firstBody, secondBody, thirdBody });
     expect(thirdBody.error).toBe("pro plan supports up to 2 active alert channels");
   });
 
@@ -79,13 +83,16 @@ describe("alert channel tier policy", () => {
     const discord = await POST(urlAlertRequest("discord", "https://discord.example.com/api/webhooks/modeltruth-secret"));
     const blocked = await POST(urlAlertRequest("webhook", "https://127.0.0.1/hooks/private"));
     const list = await GET();
-    const serialized = JSON.stringify(await list.json());
+    const blockedBody = await blocked.json();
+    const listBody = await list.json();
+    const serialized = JSON.stringify(listBody);
 
     expect(slack.status).toBe(201);
     expect(discord.status).toBe(201);
     expect(blocked.status).toBe(400);
-    expect(await blocked.json()).toEqual({ error: "local alert targets are not allowed" });
+    expect(blockedBody).toEqual({ error: "local alert targets are not allowed" });
     expect(list.status).toBe(200);
+    expectResponseKeysCamelCase({ blockedBody, listBody });
     expect(serialized).toContain("slack");
     expect(serialized).toContain("discord");
     expect(serialized).not.toContain("modeltruth-secret");

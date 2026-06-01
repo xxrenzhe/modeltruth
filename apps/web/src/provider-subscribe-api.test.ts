@@ -6,6 +6,7 @@ import { createProviderUnsubscribeToken } from "@modeltruth/crypto";
 import { createProviderSubscriptionRepository, ensureSqliteReady } from "@modeltruth/db";
 import { POST } from "./app/api/providers/subscribe/route";
 import { GET as unsubscribeGet, POST as unsubscribe } from "./app/api/providers/unsubscribe/route";
+import { expectResponseKeysCamelCase } from "./test-utils/response-key-case";
 
 let previousDatabasePath: string | undefined;
 let tempDir: string | undefined;
@@ -37,6 +38,7 @@ describe("provider subscribe API", () => {
     await repo.close();
 
     expect(response.status).toBe(201);
+    expectResponseKeysCamelCase(body);
     expect(body.subscription).toMatchObject({
       providerSlug: "openrouter",
       notificationType: "risk_trend",
@@ -81,6 +83,7 @@ describe("provider subscribe API", () => {
     await check.close();
 
     expect(response.status).toBe(200);
+    expectResponseKeysCamelCase(body);
     expect(body.subscription).toEqual({ providerSlug: "openrouter", notificationType: "risk_trend", status: "unsubscribed" });
     expect(JSON.stringify(body)).not.toContain("dev@example.com");
     expect(subscriptions).toHaveLength(1);
@@ -107,6 +110,7 @@ describe("provider subscribe API", () => {
     await check.close();
 
     expect(response.status).toBe(200);
+    expectResponseKeysCamelCase(body);
     expect(body.subscription).toEqual({ providerSlug: "openrouter", notificationType: "weekly_digest", status: "unsubscribed" });
     expect(subscriptions).toHaveLength(0);
   });

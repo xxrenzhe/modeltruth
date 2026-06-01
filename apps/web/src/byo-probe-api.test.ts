@@ -6,6 +6,7 @@ import { createAuthRepository, createBillingRepository, createProviderNodeReposi
 import { encryptSecret } from "@modeltruth/crypto";
 import { GET, POST as registerProbe } from "./app/api/workspace/probes/route";
 import { POST as heartbeatProbe } from "./app/api/probes/heartbeat/route";
+import { expectResponseKeysCamelCase } from "./test-utils/response-key-case";
 
 const cookieState = vi.hoisted(() => ({ sessionToken: "", workspaceId: "" }));
 
@@ -75,6 +76,7 @@ describe("BYO probe API", () => {
     const evidence = await getEvidencePackage("probe_run_1");
 
     expect(registered.status).toBe(201);
+    expectResponseKeysCamelCase({ registeredBody, heartbeatBody, listedBody });
     expect(registeredBody.token).toMatch(/^mtp_/);
     expect(JSON.stringify(registeredBody.probe)).not.toContain(registeredBody.token);
     expect(heartbeat.status).toBe(200);
@@ -108,6 +110,7 @@ describe("BYO probe API", () => {
     const body = await response.json();
 
     expect(response.status).toBe(403);
+    expectResponseKeysCamelCase(body);
     expect(body.error).toBe("BYO probe registration requires a Team subscription");
   });
 
@@ -139,6 +142,7 @@ describe("BYO probe API", () => {
     const evidence = await getEvidencePackage("probe_cross_workspace_run");
 
     expect(response.status).toBe(400);
+    expectResponseKeysCamelCase(body);
     expect(body.error).toBe("probe result nodeId is not registered for this workspace");
     expect(evidence).toBeUndefined();
   });

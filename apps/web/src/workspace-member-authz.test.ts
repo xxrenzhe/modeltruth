@@ -10,6 +10,7 @@ import {
 } from "@modeltruth/db";
 import { GET, POST } from "./app/api/workspace/members/route";
 import { POST as DELETE_ACCOUNT } from "./app/api/settings/privacy/delete/route";
+import { expectResponseKeysCamelCase } from "./test-utils/response-key-case";
 
 const cookieState = vi.hoisted(() => ({ sessionToken: "" }));
 
@@ -61,6 +62,7 @@ describe("workspace member authorization", () => {
     const listBody = await list.json();
 
     expect(invite.status).toBe(201);
+    expectResponseKeysCamelCase({ inviteBody, listBody });
     expect(inviteBody.member).toMatchObject({
       workspaceId: session.workspace.id,
       email: "teammate@example.com",
@@ -126,6 +128,7 @@ describe("workspace member authorization", () => {
 
     expect(deleted.status).toBe(200);
     expect(list.status).toBe(200);
+    expectResponseKeysCamelCase(listBody);
     expect(listBody.members.map((member: { email: string }) => member.email)).not.toContain("delete-member-route@example.com");
     expect(listBody.members.map((member: { email: string }) => member.email)).toContain("team-owner@example.com");
   });
