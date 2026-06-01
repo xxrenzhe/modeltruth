@@ -12,6 +12,25 @@ const protectedRouteFragments = [
   "/settings/privacy/",
   "/workspace/"
 ];
+const publicRoutes = new Set([
+  "auth/logout/route.ts",
+  "auth/magic-link/route.ts",
+  "auth/session/route.ts",
+  "auth/verify/route.ts",
+  "disputes/route.ts",
+  "gtm/visit/route.ts",
+  "health/route.ts",
+  "playground/audit/route.ts",
+  "providers/subscribe/route.ts",
+  "waitlist/route.ts"
+]);
+const protectionPatterns = [
+  /getCurrentSession\(/,
+  /verifyStripeWebhook\(/,
+  /MODELTRUTH_GTM_METRICS_TOKEN/,
+  /authorization["']\)\?\.match\(\^Bearer/,
+  /token\.startsWith\("mtp_"\)/
+];
 
 describe("API auth guard static rules", () => {
   it("does not allow business API routes to trust spoofable user headers", () => {
@@ -22,6 +41,16 @@ describe("API auth guard static rules", () => {
       .map(({ file }) => path.relative(process.cwd(), file));
 
     expect(violations).toEqual([]);
+  });
+
+  it("requires every non-public API route to declare an authentication mechanism", () => {
+    const unprotected = routeFiles()
+      .map((file) => ({ file, route: apiRouteName(file), source: readFileSync(file, "utf-8") }))
+      .filter(({ route }) => !publicRoutes.has(route))
+      .filter(({ source }) => !protectionPatterns.some((pattern) => pattern.test(source)))
+      .map(({ route }) => route);
+
+    expect(unprotected).toEqual([]);
   });
 });
 
@@ -35,4 +64,8 @@ function routeFiles(directory = apiRoot): string[] {
 
 function normalizePath(file: string) {
   return file.split(path.sep).join("/");
+}
+
+function apiRouteName(file: string) {
+  return normalizePath(path.relative(apiRoot, file));
 }
