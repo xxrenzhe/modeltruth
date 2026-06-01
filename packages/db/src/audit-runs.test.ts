@@ -39,7 +39,12 @@ describe("audit run evidence persistence", () => {
       targetModelId: "gpt-5.1",
       status: "warning",
       confidence: 0.6,
-      metrics: { ttftMs: 900, statusCode: 200 },
+      metrics: {
+        ttftMs: 900,
+        statusCode: 200,
+        rawEndpoint: "https://private-risk-evidence.example.com/v1/chat/completions",
+        rawPrompt: "private metric prompt"
+      },
       assertions: [{ id: "USAGE_PRESENT", status: "inconclusive" }],
       evidenceSummary: {
         requestBodyStored: false,
@@ -225,6 +230,16 @@ describe("audit run evidence persistence", () => {
     expect(persistedFlags[0]).toMatchObject({ providerSlug: "openai", assertionId: "OVERALL_STATUS", evidenceCount: 2 });
     expect(persistedEvidence.map((item) => item.runId)).toEqual(["run_warning", "run_warning_retest"]);
     expect(JSON.stringify(persistedEvidence)).not.toContain("sk-public-summary-leak");
+    expect(JSON.stringify(persistedEvidence)).not.toContain("private-risk-evidence.example.com");
+    expect(JSON.stringify(persistedEvidence)).not.toContain("private metric prompt");
+    expect(JSON.stringify(persistedEvidence)).not.toContain("private completion");
+    expect(JSON.stringify(persistedEvidence)).not.toContain("private excerpt");
+    expect(JSON.stringify(persistedEvidence)).not.toContain("private prompt");
+    expect(JSON.stringify(persistedEvidence)).not.toContain("authorization");
+    expect(persistedEvidence[0].redactedSummary).toMatchObject({
+      metrics: { statusCode: 200, ttftMs: 900 },
+      evidenceSummary: { requestBodyStored: false }
+    });
     expect(summary.riskFlags.map((run) => run.runId)).toEqual(
       expect.arrayContaining(["run_high_confidence_risk", "run_high_confidence_risk_retest", "run_independent_risk_a", "run_independent_risk_b"])
     );

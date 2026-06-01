@@ -2,6 +2,7 @@ import postgres from "postgres";
 import { getAppConfig } from "@modeltruth/config";
 import { redactSecrets } from "@modeltruth/crypto";
 import { buildPublicAuditSummary, type PublicAuditSummary } from "./public-audit-summary";
+import { normalizePublicUsage } from "./public-usage";
 import { createRiskFlagRepository, type RiskFlagSeverity } from "./risk-flags";
 export { applyAuditRetentionPolicy } from "./audit-retention";
 export type { ApplyAuditRetentionOptions, AuditRetentionResult } from "./audit-retention";
@@ -312,15 +313,78 @@ function riskFlagInput(
     runId: input.id,
     targetModelId: input.targetModelId,
     suiteId: input.suiteId,
-    redactedSummary: redactSecrets({
-      status: input.status,
-      confidence: input.confidence,
-      metrics: input.metrics,
-      assertion: assertion.publicSummary,
-      evidenceSummary: input.evidenceSummary
-    }),
+    redactedSummary: sanitizeRiskFlagSummary(input, assertion.publicSummary),
     observedAt: createdAt
   };
+}
+
+function sanitizeRiskFlagSummary(
+  input: Pick<SaveAuditRunInput, "status" | "confidence" | "metrics" | "evidenceSummary">,
+  assertion: Record<string, unknown>
+) {
+  return redactSecrets(stripUndefined({
+    status: input.status,
+    confidence: input.confidence,
+    metrics: sanitizeRiskMetrics(input.metrics),
+    assertion,
+    evidenceSummary: sanitizeRiskEvidenceSummary(input.evidenceSummary)
+  }));
+}
+
+function sanitizeRiskMetrics(value: unknown) {
+  const record = asRecord(value);
+  if (!record) return {};
+  const metrics = pick(record, ["statusCode", "ttftMs", "totalLatencyMs", "tokenUsage", "billingVariance", "costEstimate"]);
+  if (metrics.tokenUsage) metrics.tokenUsage = normalizePublicUsage(metrics.tokenUsage);
+  if (metrics.billingVariance) metrics.billingVariance = pick(asRecord(metrics.billingVariance), ["reportedTokens", "expectedTokens", "varianceRatio"]);
+  if (metrics.costEstimate) metrics.costEstimate = pick(asRecord(metrics.costEstimate), ["inputCostUsd", "outputCostUsd", "totalCostUsd", "currency"]);
+  return stripUndefined(metrics) ?? {};
+}
+
+function sanitizeRiskEvidenceSummary(value: unknown) {
+  const record = asRecord(value);
+  if (!record) return {};
+  const summary = pick(record, [
+    "redaction",
+    "requestBodyStored",
+    "responseBodyStored",
+    "targetHostHash",
+    "completionHash",
+    "usage",
+    "billingVariance",
+    "suiteId",
+    "suiteVersion",
+    "promptNonceHash",
+    "numericNonceHash",
+    "timestampBucket",
+    "retestRecommendation",
+    "responseExcerptPolicy",
+    "fullResponseStored",
+    "fullResponsePolicy",
+    "finishReason",
+    "errorCode",
+    "errorType",
+    "traceparent",
+    "externalProbe",
+    "probeRegion"
+  ]);
+  if (summary.usage) summary.usage = normalizePublicUsage(summary.usage);
+  if (summary.billingVariance) summary.billingVariance = pick(asRecord(summary.billingVariance), ["reportedTokens", "expectedTokens", "varianceRatio"]);
+  return stripUndefined(summary) ?? {};
+}
+
+function pick(record: Record<string, unknown> | undefined, keys: string[]) {
+  if (!record) return {};
+  return Object.fromEntries(keys.filter((key) => key in record).map((key) => [key, record[key]]));
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+}
+
+function stripUndefined<T extends Record<string, unknown>>(record: T) {
+  const entries = Object.entries(record).filter(([, value]) => value !== undefined);
+  return entries.length ? Object.fromEntries(entries) : undefined;
 }
 
 async function findPreviousConfirmingRiskRun(input: SaveAuditRunInput, assertionId: string) {
