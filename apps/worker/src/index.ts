@@ -137,18 +137,26 @@ export async function runWorkerTick() {
 }
 
 async function runDisputeReviewJob(payloadJson: string) {
-  const payload = JSON.parse(payloadJson) as { disputeId?: string; providerSlug?: string; reviewDueAt?: string };
+  const payload = JSON.parse(payloadJson) as {
+    disputeId?: string;
+    providerSlug?: string;
+    requestType?: string;
+    reviewDueAt?: string;
+  };
   if (!payload.disputeId || !payload.providerSlug) throw new Error("dispute review job requires disputeId and providerSlug");
   if (payload.reviewDueAt && Number.isNaN(new Date(payload.reviewDueAt).getTime())) {
     throw new Error("dispute review job has invalid reviewDueAt");
   }
   const disputes = await createProviderDisputeRepository();
   try {
-    const updated = await disputes.markProviderResponseAttached(payload.disputeId);
+    const updated =
+      payload.requestType === "provider_response"
+        ? await disputes.markProviderResponseAttached(payload.disputeId)
+        : await disputes.markReviewStarted(payload.disputeId);
     if (!updated) throw new Error(`dispute ${payload.disputeId} not found`);
     writeJsonLog({
       service: "worker",
-      event: "dispute.review_attached",
+      event: payload.requestType === "provider_response" ? "dispute.response_attached" : "dispute.review_started",
       data: { disputeId: updated.id, providerSlug: updated.providerSlug, status: updated.status, reviewDueAt: updated.reviewDueAt }
     });
   } finally {

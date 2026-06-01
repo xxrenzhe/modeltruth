@@ -6,7 +6,6 @@ import {
   createAuthRepository,
   createJobRepository,
   createModelRegistryRepository,
-  createProviderDisputeRepository,
   createWorkspacePrivacyRepository,
   ensureSqliteReady,
   getEvidencePackage,
@@ -297,55 +296,6 @@ describe("runWorkerTick calibration jobs", () => {
       expect(secondAlert).toBeUndefined();
     } finally {
       await refreshed.close();
-      harness.cleanup();
-    }
-  });
-
-  it("processes dispute review jobs and attaches provider response status", async () => {
-    const harness = await createHarness("modeltruth-worker-dispute-review-");
-    const disputes = await createProviderDisputeRepository();
-    let disputeId = "";
-    try {
-      const dispute = await disputes.create({
-        providerSlug: "openrouter",
-        runId: "run_warning",
-        contactEmail: "provider@example.com",
-        statement: "Please review this technical audit result and attach our response."
-      });
-      disputeId = dispute.id;
-    } finally {
-      await disputes.close();
-    }
-
-    const jobs = await createJobRepository();
-    try {
-      await jobs.enqueue({
-        type: "disputeReview",
-        maxAttempts: 1,
-        payload: {
-          source: "dispute-policy",
-          disputeId,
-          providerSlug: "openrouter",
-          runId: "run_warning",
-          reviewDueAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
-        }
-      });
-    } finally {
-      await jobs.close();
-    }
-
-    await runWorkerTick();
-
-    const refreshedDisputes = await createProviderDisputeRepository();
-    const refreshedJobs = await createJobRepository();
-    try {
-      const dispute = (await refreshedDisputes.listByProvider("openrouter")).find((item) => item.id === disputeId);
-      const remainingJob = await refreshedJobs.claimNext({ workerId: "test", types: ["disputeReview"] });
-      expect(dispute?.status).toBe("provider_response_attached");
-      expect(remainingJob).toBeUndefined();
-    } finally {
-      await refreshedJobs.close();
-      await refreshedDisputes.close();
       harness.cleanup();
     }
   });

@@ -25,6 +25,7 @@ export interface ProviderDisputeRecord extends CreateProviderDisputeInput {
 export interface ProviderDisputeRepository {
   create(input: CreateProviderDisputeInput): Promise<ProviderDisputeRecord>;
   listByProvider(providerSlug: string): Promise<ProviderDisputeRecord[]>;
+  markReviewStarted(id: string): Promise<ProviderDisputeRecord | undefined>;
   markProviderResponseAttached(id: string): Promise<ProviderDisputeRecord | undefined>;
   close(): Promise<void>;
 }
@@ -76,10 +77,16 @@ class SqliteProviderDisputeRepository implements ProviderDisputeRepository {
   }
 
   async markProviderResponseAttached(id: string): Promise<ProviderDisputeRecord | undefined> {
+    return this.updateReviewStatus(id, "provider_response_attached");
+  }
+
+  async markReviewStarted(id: string): Promise<ProviderDisputeRecord | undefined> {
+    return this.updateReviewStatus(id, "under_review");
+  }
+
+  private async updateReviewStatus(id: string, status: ProviderDisputeStatus): Promise<ProviderDisputeRecord | undefined> {
     const now = new Date().toISOString();
-    this.db
-      .prepare("update provider_disputes set status = 'provider_response_attached', updated_at = ? where id = ?")
-      .run(now, id);
+    this.db.prepare("update provider_disputes set status = ?, review_started_at = coalesce(review_started_at, ?), updated_at = ? where id = ?").run(status, now, now, id);
     const row = this.db.prepare("select * from provider_disputes where id = ? limit 1").get(id) as ProviderDisputeRow | undefined;
     return row ? mapRow(row) : undefined;
   }
@@ -121,9 +128,17 @@ class PostgresProviderDisputeRepository implements ProviderDisputeRepository {
   }
 
   async markProviderResponseAttached(id: string): Promise<ProviderDisputeRecord | undefined> {
+    return this.updateReviewStatus(id, "provider_response_attached");
+  }
+
+  async markReviewStarted(id: string): Promise<ProviderDisputeRecord | undefined> {
+    return this.updateReviewStatus(id, "under_review");
+  }
+
+  private async updateReviewStatus(id: string, status: ProviderDisputeStatus): Promise<ProviderDisputeRecord | undefined> {
     const rows = await this.sql<ProviderDisputeRow[]>`
       update provider_disputes
-      set status = 'provider_response_attached', updated_at = ${new Date().toISOString()}
+      set status = ${status}, review_started_at = coalesce(review_started_at, ${new Date().toISOString()}), updated_at = ${new Date().toISOString()}
       where id = ${id}
       returning *
     `;
