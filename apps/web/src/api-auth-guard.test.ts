@@ -29,6 +29,7 @@ const protectionPatterns = [
   /getCurrentSession\(/,
   /verifyStripeWebhook\(/,
   /MODELTRUTH_GTM_METRICS_TOKEN/,
+  /MODELTRUTH_ADMIN_TOKEN/,
   /authorization["']\)\?\.match\(\^Bearer/,
   /token\.startsWith\("mtp_"\)/
 ];

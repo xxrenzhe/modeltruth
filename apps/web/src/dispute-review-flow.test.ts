@@ -5,14 +5,18 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createJobRepository, createProviderDisputeRepository, ensureSqliteReady } from "@modeltruth/db";
 import { POST as submitDispute } from "./app/api/disputes/route";
+import { POST as reviewDispute } from "./app/api/disputes/review/route";
 
 let previousDatabasePath: string | undefined;
+let previousAdminToken: string | undefined;
 let tempDir: string | undefined;
 
 describe("dispute review flow", () => {
   afterEach(() => {
     if (previousDatabasePath === undefined) delete process.env.DATABASE_PATH;
     else process.env.DATABASE_PATH = previousDatabasePath;
+    if (previousAdminToken === undefined) delete process.env.MODELTRUTH_ADMIN_TOKEN;
+    else process.env.MODELTRUTH_ADMIN_TOKEN = previousAdminToken;
     if (tempDir) rmSync(tempDir, { recursive: true, force: true });
     tempDir = undefined;
   });
@@ -67,6 +71,53 @@ describe("dispute review flow", () => {
     expect(body.error).toBe("evidenceUrl must use HTTPS");
   });
 
+  it("lets admin review tooling update dispute public status", async () => {
+    await setupDatabase();
+    previousAdminToken = process.env.MODELTRUTH_ADMIN_TOKEN;
+    process.env.MODELTRUTH_ADMIN_TOKEN = "admin_review_secret";
+    const created = await submitDispute(
+      jsonRequest({
+        providerSlug: "openrouter",
+        requestType: "provider_response",
+        contactEmail: "provider@example.com",
+        statement: "Please attach this provider response after operator review."
+      })
+    );
+    const createdBody = await created.json();
+    const disputeId = createdBody.dispute.id;
+
+    const hidden = await reviewDispute(reviewRequest({ disputeId, status: "resolved" }));
+    delete process.env.MODELTRUTH_ADMIN_TOKEN;
+    const notFound = await reviewDispute(reviewRequest({ disputeId, status: "resolved" }, "admin_review_secret"));
+    process.env.MODELTRUTH_ADMIN_TOKEN = "admin_review_secret";
+    const denied = await reviewDispute(reviewRequest({ disputeId, status: "resolved" }, "wrong"));
+    const resolved = await reviewDispute(reviewRequest({ disputeId, status: "resolved" }, "admin_review_secret"));
+    const attached = await reviewDispute(
+      reviewRequest({ disputeId, status: "provider_response_attached" }, "admin_review_secret")
+    );
+    const reviewStarted = await reviewDispute(reviewRequest({ disputeId, status: "under_review" }, "admin_review_secret"));
+
+    expect(hidden.status).toBe(401);
+    expect(notFound.status).toBe(404);
+    expect(denied.status).toBe(401);
+    expect(await denied.json()).toEqual({ error: "unauthorized" });
+    expect((await resolved.json()).dispute).toMatchObject({ id: disputeId, status: "resolved" });
+    expect((await attached.json()).dispute).toMatchObject({ id: disputeId, status: "provider_response_attached" });
+    expect((await reviewStarted.json()).dispute).toMatchObject({ id: disputeId, status: "under_review" });
+  });
+
+  it("rejects invalid admin dispute review transitions", async () => {
+    await setupDatabase();
+    previousAdminToken = process.env.MODELTRUTH_ADMIN_TOKEN;
+    process.env.MODELTRUTH_ADMIN_TOKEN = "admin_review_secret";
+
+    const response = await reviewDispute(reviewRequest({ disputeId: "missing", status: "upheld" }, "admin_review_secret"));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("status must be under_review, resolved or provider_response_attached");
+  });
+
   it("starts a review job when a provider dispute is submitted", () => {
     const source = readFileSync("apps/web/src/app/api/disputes/route.ts", "utf8");
 
@@ -75,6 +126,16 @@ describe("dispute review flow", () => {
     expect(source).toContain("reviewStartedAt");
     expect(source).toContain("reviewDueAt");
     expect(source).toContain("dispute-policy");
+  });
+
+  it("exposes an admin-token protected dispute review backend", () => {
+    const source = readFileSync("apps/web/src/app/api/disputes/review/route.ts", "utf8");
+
+    expect(source).toContain("MODELTRUTH_ADMIN_TOKEN");
+    expect(source).toContain("markResolved");
+    expect(source).toContain("markProviderResponseAttached");
+    expect(source).toContain("markReviewStarted");
+    expect(source).toContain("Bearer");
   });
 
   it("renders database-backed provider review status on public provider boards", () => {
@@ -134,6 +195,17 @@ function jsonRequest(body: unknown) {
   return new Request("http://localhost/api/disputes", {
     method: "POST",
     headers: { "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+}
+
+function reviewRequest(body: unknown, token?: string) {
+  return new Request("http://localhost/api/disputes/review", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...(token ? { authorization: `Bearer ${token}` } : {})
+    },
     body: JSON.stringify(body)
   });
 }
