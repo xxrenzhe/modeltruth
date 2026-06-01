@@ -46,6 +46,7 @@ export interface JobRepository {
   claimNext(input: ClaimJobInput): Promise<JobRecord | undefined>;
   hasActiveFingerprint(type: JobType, fingerprint: string): Promise<boolean>;
   hasRecentFingerprint(type: JobType, fingerprint: string, since: Date): Promise<boolean>;
+  countRecentWorkspaceManualAudits(workspaceId: string, since: Date): Promise<number>;
   heartbeat(id: string, workerId: string, now?: Date): Promise<boolean>;
   complete(id: string): Promise<void>;
   fail(id: string, error: string, nextRunAfter?: Date): Promise<void>;
@@ -165,6 +166,19 @@ export class SqliteJobRepository implements JobRepository {
     return Boolean(row);
   }
 
+  async countRecentWorkspaceManualAudits(workspaceId: string, since: Date): Promise<number> {
+    const row = this.db
+      .prepare(
+        `select count(*) as count from jobs
+         where type = 'deepAudit'
+           and created_at >= ?
+           and json_extract(payload_json, '$.source') = 'workspace-manual'
+           and json_extract(payload_json, '$.workspaceId') = ?`
+      )
+      .get(since.toISOString(), workspaceId) as { count: number } | undefined;
+    return row?.count ?? 0;
+  }
+
   async heartbeat(id: string, workerId: string, now = new Date()): Promise<boolean> {
     const result = this.db
       .prepare("update jobs set locked_at = ?, updated_at = ? where id = ? and status = 'running' and locked_by = ?")
@@ -281,6 +295,17 @@ class PostgresJobRepository implements JobRepository {
       limit 1
     `;
     return rows.length > 0;
+  }
+
+  async countRecentWorkspaceManualAudits(workspaceId: string, since: Date): Promise<number> {
+    const rows = await this.sql<{ count: string }[]>`
+      select count(*)::text as count from jobs
+      where type = 'deepAudit'
+        and created_at >= ${since.toISOString()}
+        and payload_json::jsonb ->> 'source' = 'workspace-manual'
+        and payload_json::jsonb ->> 'workspaceId' = ${workspaceId}
+    `;
+    return Number(rows[0]?.count ?? 0);
   }
 
   async heartbeat(id: string, workerId: string, now = new Date()): Promise<boolean> {

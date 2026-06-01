@@ -5,6 +5,8 @@ import { safeErrorMessage } from "@modeltruth/shared";
 import { getCurrentSession } from "../../../../lib/auth";
 
 const manualWorkspaceSuites = new Set(["smoke", "reasoning-lite", "context-lite", "billing-lite"]);
+const manualAuditWindowMs = 10 * 60 * 1000;
+const manualAuditLimits: Record<string, number> = { pro: 6, team: 20 };
 
 export async function POST(request: Request) {
   const session = await getCurrentSession();
@@ -31,6 +33,15 @@ export async function POST(request: Request) {
     const suiteId = `${suite.suiteId}@${suite.suiteVersion}`;
     const fingerprint = `manual:${session.workspace.id}:${node.id}:${suiteId}`;
     const duplicate = await jobs.hasActiveFingerprint("deepAudit", fingerprint);
+    const limit = manualAuditLimits[session.workspace.tier] ?? 0;
+    const since = new Date(Date.now() - manualAuditWindowMs);
+    const recentCount = await jobs.countRecentWorkspaceManualAudits(session.workspace.id, since);
+    if (!duplicate && recentCount >= limit) {
+      return NextResponse.json(
+        { error: "manual audit rate limit exceeded", retryAfterSeconds: Math.ceil(manualAuditWindowMs / 1000) },
+        { status: 429, headers: buildRateLimitHeaders(limit, 0) }
+      );
+    }
     if (!duplicate) {
       await jobs.enqueue({
         type: "deepAudit",
@@ -55,7 +66,10 @@ export async function POST(request: Request) {
           duplicate
         }
       },
-      { status: duplicate ? 200 : 201 }
+      {
+        status: duplicate ? 200 : 201,
+        headers: buildRateLimitHeaders(limit, Math.max(limit - recentCount - (duplicate ? 0 : 1), 0))
+      }
     );
   } catch (error) {
     return NextResponse.json({ error: safeErrorMessage(error, "invalid audit request") }, { status: 400 });
@@ -69,4 +83,13 @@ function parseNodeId(value: unknown) {
   const nodeId = typeof value === "string" ? value.trim() : "";
   if (!nodeId) throw new Error("nodeId is required");
   return nodeId;
+}
+
+function buildRateLimitHeaders(limit: number, remaining: number) {
+  return {
+    "retry-after": String(Math.ceil(manualAuditWindowMs / 1000)),
+    "x-ratelimit-limit": String(limit),
+    "x-ratelimit-remaining": String(remaining),
+    "x-ratelimit-window": String(Math.ceil(manualAuditWindowMs / 1000))
+  };
 }

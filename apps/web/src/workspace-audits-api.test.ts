@@ -126,6 +126,55 @@ describe("workspace audits API", () => {
     expect(claimed).toBeTruthy();
     expect(duplicate).toBeUndefined();
   });
+
+  it("rate limits Pro manual audits across nodes in a short window", async () => {
+    const { session, node } = await createSessionWithNode("pro");
+    const nodes = [node, ...(await createAdditionalNodes(session.workspace.id, "pro-limit", 6))];
+
+    for (const candidate of nodes.slice(0, 6)) {
+      const response = await POST(auditRequest(candidate.id, "smoke@1.0.0"));
+      expect(response.status).toBe(201);
+      expect(response.headers.get("x-ratelimit-limit")).toBe("6");
+    }
+
+    const limited = await POST(auditRequest(nodes[6].id, "smoke@1.0.0"));
+    const body = await limited.json();
+
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("x-ratelimit-limit")).toBe("6");
+    expect(limited.headers.get("x-ratelimit-remaining")).toBe("0");
+    expect(limited.headers.get("retry-after")).toBe("600");
+    expect(body.error).toBe("manual audit rate limit exceeded");
+  });
+
+  it("allows Team workspaces beyond the Pro manual audit limit", async () => {
+    const { session, node } = await createSessionWithNode("team");
+    const nodes = [node, ...(await createAdditionalNodes(session.workspace.id, "team-limit", 6))];
+
+    const responses = [];
+    for (const candidate of nodes) {
+      responses.push(await POST(auditRequest(candidate.id, "reasoning-lite@1.0.0")));
+    }
+
+    expect(responses.map((response) => response.status)).toEqual([201, 201, 201, 201, 201, 201, 201]);
+    expect(responses.at(-1)?.headers.get("x-ratelimit-limit")).toBe("20");
+    expect(responses.at(-1)?.headers.get("x-ratelimit-remaining")).toBe("13");
+  });
+
+  it("does not spend additional quota on duplicate active manual audits", async () => {
+    const { session, node } = await createSessionWithNode("pro");
+    const nodes = [node, ...(await createAdditionalNodes(session.workspace.id, "duplicate-quota", 5))];
+
+    for (const candidate of nodes) {
+      expect((await POST(auditRequest(candidate.id, "context-lite@1.0.0"))).status).toBe(201);
+    }
+    const duplicate = await POST(auditRequest(node.id, "context-lite@1.0.0"));
+    const body = await duplicate.json();
+
+    expect(duplicate.status).toBe(200);
+    expect(duplicate.headers.get("x-ratelimit-remaining")).toBe("0");
+    expect(body.audit).toMatchObject({ status: "alreadyQueued", duplicate: true });
+  });
 });
 
 async function createSessionWithNode(
@@ -179,6 +228,30 @@ async function createSession(tier: "free" | "pro" | "team", email: string): Prom
     return refreshed.session;
   } finally {
     await auth.close();
+  }
+}
+
+async function createAdditionalNodes(workspaceId: string, label: string, count: number) {
+  const nodes = await createProviderNodeRepository();
+  try {
+    return await Promise.all(
+      Array.from({ length: count }, (_, index) =>
+        nodes.create({
+          workspaceId,
+          name: `${label} node ${index + 1}`,
+          baseUrl: `https://api-${label}-${index + 1}.example.com/v1`,
+          baseUrlHostHash: `${label}-host-hash-${index + 1}`,
+          modelId: "gpt-5.1",
+          encryptedApiKey: encryptSecret(`sk-${label}-${index + 1}-secret-123456`),
+          apiKeySuffix: getSecretSuffix(`sk-${label}-${index + 1}-secret-123456`),
+          heartbeatIntervalSeconds: 300,
+          deepAuditIntervalSeconds: 43200,
+          ttftThresholdMs: 3000
+        })
+      )
+    );
+  } finally {
+    await nodes.close();
   }
 }
 
