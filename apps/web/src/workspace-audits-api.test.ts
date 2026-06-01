@@ -8,6 +8,7 @@ import {
   createJobRepository,
   createProviderNodeRepository,
   ensureSqliteReady,
+  saveAuditRun,
   type AuthSession
 } from "@modeltruth/db";
 import { encryptSecret, getSecretSuffix } from "@modeltruth/crypto";
@@ -164,6 +165,57 @@ describe("workspace audits API", () => {
     expect(responses.at(-1)?.headers.get("x-ratelimit-remaining")).toBe("13");
   });
 
+  it("downshifts expensive Pro manual audits after monthly audit cost exceeds fair-use budget", async () => {
+    const { session, node } = await createSessionWithNode("pro");
+    await saveCostedRun(session.workspace.id, 8);
+
+    const response = await POST(auditRequest(node.id, "context-lite@1.0.0"));
+    const body = await response.json();
+    const jobs = await createJobRepository();
+    const claimed = await jobs.claimNext({ workerId: "workspace-audit-test", types: ["deepAudit"] });
+    await jobs.close();
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe(String(24 * 60 * 60));
+    expect(response.headers.get("x-fair-use-action")).toBe("downshift");
+    expect(body).toMatchObject({
+      error: "manual audit downshifted by fair use budget",
+      fairUse: {
+        action: "downshift",
+        reason: "monthly_audit_cost_exceeded_40_percent_of_plan_revenue",
+        currentMonthCostUsd: 8,
+        budgetUsd: 7.6,
+        recommendedDeepAuditDelayMs: 24 * 60 * 60 * 1000
+      }
+    });
+    expect(claimed).toBeUndefined();
+  });
+
+  it("still allows smoke audits when fair-use downshift is active", async () => {
+    const { session, node } = await createSessionWithNode("pro");
+    await saveCostedRun(session.workspace.id, 8);
+
+    const response = await POST(auditRequest(node.id, "smoke@1.0.0"));
+    const body = await response.json();
+    const jobs = await createJobRepository();
+    const claimed = await jobs.claimNext({ workerId: "workspace-audit-test", types: ["deepAudit"] });
+    await jobs.close();
+    const payload = JSON.parse(claimed?.payloadJson ?? "{}");
+
+    expect(response.status).toBe(201);
+    expect(body.audit).toMatchObject({ status: "queued", suiteId: "smoke@1.0.0", duplicate: false });
+    expect(body.fairUse).toMatchObject({
+      action: "downshift",
+      reason: "monthly_audit_cost_exceeded_40_percent_of_plan_revenue"
+    });
+    expect(payload).toMatchObject({
+      source: "workspace-manual",
+      workspaceId: session.workspace.id,
+      nodeId: node.id,
+      suiteId: "smoke@1.0.0"
+    });
+  });
+
   it("does not spend additional quota on duplicate active manual audits", async () => {
     const { session, node } = await createSessionWithNode("pro");
     const nodes = [node, ...(await createAdditionalNodes(session.workspace.id, "duplicate-quota", 5))];
@@ -256,6 +308,22 @@ async function createAdditionalNodes(workspaceId: string, label: string, count: 
   } finally {
     await nodes.close();
   }
+}
+
+async function saveCostedRun(workspaceId: string, totalCostUsd: number) {
+  await saveAuditRun({
+    id: crypto.randomUUID(),
+    workspaceId,
+    suiteId: "reasoning-lite",
+    suiteVersion: "1.0.0",
+    runType: "deepAudit",
+    targetModelId: "gpt-5.1",
+    status: "pass",
+    confidence: 0.9,
+    metrics: { costEstimate: { totalCostUsd, currency: "USD" } },
+    assertions: [{ id: "COST_TRACKED", status: "pass" }],
+    evidenceSummary: { requestBodyStored: false }
+  });
 }
 
 function auditRequest(nodeId: string, suiteId: string, requestId?: string) {

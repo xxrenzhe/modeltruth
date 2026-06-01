@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuditSuite } from "@modeltruth/audit-engine";
-import { createJobRepository, createProviderNodeRepository } from "@modeltruth/db";
+import { createJobRepository, createProviderNodeRepository, getWorkspaceFairUseStatus } from "@modeltruth/db";
 import { safeErrorMessage } from "@modeltruth/shared";
 import { getCurrentSession } from "../../../../lib/auth";
 import { traceIdFromRequest } from "../../../../lib/request-trace";
@@ -35,6 +35,16 @@ export async function POST(request: Request) {
     const requestId = request.headers.get("x-request-id")?.trim() || undefined;
     const fingerprint = `manual:${session.workspace.id}:${node.id}:${suiteId}`;
     const duplicate = await jobs.hasActiveFingerprint("deepAudit", fingerprint);
+    const fairUse = await getWorkspaceFairUseStatus(session.workspace.id);
+    if (!duplicate && fairUse.action !== "allow" && suite.suiteId !== "smoke") {
+      return NextResponse.json(
+        {
+          error: "manual audit downshifted by fair use budget",
+          fairUse: publicFairUseStatus(fairUse)
+        },
+        { status: 429, headers: buildFairUseHeaders(fairUse.action, fairUse.recommendedDeepAuditDelayMs) }
+      );
+    }
     const limit = manualAuditLimits[session.workspace.tier] ?? 0;
     const since = new Date(Date.now() - manualAuditWindowMs);
     const recentCount = await jobs.countRecentWorkspaceManualAudits(session.workspace.id, since);
@@ -68,7 +78,8 @@ export async function POST(request: Request) {
           nodeId: node.id,
           suiteId,
           duplicate
-        }
+        },
+        fairUse: fairUse.action === "allow" ? undefined : publicFairUseStatus(fairUse)
       },
       {
         status: duplicate ? 200 : 201,
@@ -87,6 +98,23 @@ function parseNodeId(value: unknown) {
   const nodeId = typeof value === "string" ? value.trim() : "";
   if (!nodeId) throw new Error("nodeId is required");
   return nodeId;
+}
+
+function publicFairUseStatus(fairUse: Awaited<ReturnType<typeof getWorkspaceFairUseStatus>>) {
+  return {
+    action: fairUse.action,
+    reason: fairUse.reason,
+    currentMonthCostUsd: fairUse.currentMonthCostUsd,
+    budgetUsd: fairUse.budgetUsd,
+    recommendedDeepAuditDelayMs: fairUse.recommendedDeepAuditDelayMs
+  };
+}
+
+function buildFairUseHeaders(action: string, recommendedDelayMs?: number) {
+  return {
+    "retry-after": String(Math.ceil((recommendedDelayMs ?? manualAuditWindowMs) / 1000)),
+    "x-fair-use-action": action
+  };
 }
 
 function buildRateLimitHeaders(limit: number, remaining: number) {
