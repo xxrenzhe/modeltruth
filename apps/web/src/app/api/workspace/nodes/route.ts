@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { createJobRepository, createProviderNodeRepository } from "@modeltruth/db";
 import { encryptSecret, getSecretSuffix } from "@modeltruth/crypto";
-import { assertPublicResolvedAddresses, validatePublicHttpsUrl } from "@modeltruth/shared";
+import { assertPublicResolvedAddresses, safeErrorMessage, validatePublicHttpsUrl } from "@modeltruth/shared";
 import { getCurrentSession } from "../../../../lib/auth";
 import {
   clampNodeAlertPolicy,
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     await repo.markScheduled(node.id, "heartbeat", new Date(initialHeartbeatAt.getTime() + node.heartbeatIntervalSeconds * 1000));
     return NextResponse.json({ node }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "invalid request" }, { status: 400 });
+    return NextResponse.json({ error: safeErrorMessage(error, "invalid request") }, { status: 400 });
   } finally {
     await repo.close();
   }
@@ -104,7 +104,7 @@ async function validateBaseUrl(value: string): Promise<URL> {
     await assertPublicResolvedAddresses(url, resolvePublicDns, "baseUrl");
     return url;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = safeErrorMessage(error, "invalid baseUrl");
     if (!message.includes("public endpoint") && !message.includes("address is not public")) throw error;
     throw new Error("local endpoints are not allowed");
   }

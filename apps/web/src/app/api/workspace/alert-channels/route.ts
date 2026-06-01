@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { lookup } from "node:dns/promises";
 import { createAlertChannelRepository, type AlertChannelType } from "@modeltruth/db";
 import { encryptSecret } from "@modeltruth/crypto";
-import { assertPublicResolvedAddresses, validatePublicHttpsUrl } from "@modeltruth/shared";
+import { assertPublicResolvedAddresses, safeErrorMessage, validatePublicHttpsUrl } from "@modeltruth/shared";
 import { getCurrentSession } from "../../../../lib/auth";
 import { resolveNodeSchedulePolicy, validateAlertChannelCreation } from "../../../../lib/workspace-tier-policy";
 
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
       await repo.close();
     }
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "invalid request" }, { status: 400 });
+    return NextResponse.json({ error: safeErrorMessage(error, "invalid request") }, { status: 400 });
   }
 }
 
@@ -69,7 +69,7 @@ async function validateTarget(type: AlertChannelType, body: Record<string, unkno
     await assertPublicResolvedAddresses(url, resolvePublicDns, "alert target");
     return url.toString();
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = safeErrorMessage(error, "invalid alert target");
     if (message.includes("public endpoint") || message.includes("address is not public")) {
       throw new Error("local alert targets are not allowed");
     }

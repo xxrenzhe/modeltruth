@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createJobRepository } from "@modeltruth/db";
+import { safeErrorMessage } from "@modeltruth/shared";
 import { getCurrentSession } from "../../../../lib/auth";
 
 export async function POST(request: Request) {
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
       await jobs.close();
     }
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "invalid support request" }, { status: 400 });
+    return NextResponse.json({ error: safeErrorMessage(error, "invalid support request") }, { status: 400 });
   }
 }
 

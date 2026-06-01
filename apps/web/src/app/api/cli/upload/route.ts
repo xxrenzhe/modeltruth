@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuditSuite } from "@modeltruth/audit-engine";
 import { redactSecrets } from "@modeltruth/crypto";
 import { saveAuditRun } from "@modeltruth/db";
+import { safeErrorMessage } from "@modeltruth/shared";
 import { getCurrentSession } from "../../../../lib/auth";
 
 export async function POST(request: Request) {
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
   try {
     parsedSuite = getAuditSuite(String(body.suiteId ?? "smoke@1.0.0"));
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unsupported audit suite" }, { status: 400 });
+    return NextResponse.json({ error: safeErrorMessage(error, "Unsupported audit suite") }, { status: 400 });
   }
   const payload = redactSecrets({
     id: reportId,

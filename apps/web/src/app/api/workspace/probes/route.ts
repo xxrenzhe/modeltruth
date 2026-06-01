@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createByoProbeRepository } from "@modeltruth/db";
+import { safeErrorMessage } from "@modeltruth/shared";
 import { getCurrentSession } from "../../../../lib/auth";
 
 export async function GET() {
@@ -35,6 +36,6 @@ export async function POST(request: Request) {
       await repo.close();
     }
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "invalid probe registration" }, { status: 400 });
+    return NextResponse.json({ error: safeErrorMessage(error, "invalid probe registration") }, { status: 400 });
   }
 }

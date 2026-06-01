@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createGtmAnalyticsRepository, type GtmExternalMetricSource } from "@modeltruth/db";
+import { safeErrorMessage } from "@modeltruth/shared";
 
 export async function POST(request: Request) {
   const configuredToken = process.env.MODELTRUTH_GTM_METRICS_TOKEN;
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ recorded: true });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "invalid external metric" }, { status: 400 });
+    return NextResponse.json({ error: safeErrorMessage(error, "invalid external metric") }, { status: 400 });
   }
 }
 

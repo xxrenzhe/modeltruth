@@ -59,6 +59,12 @@ export function scrubObservabilityPayload<T>(sink: ObservabilitySink, payload: T
   return scrubbed;
 }
 
+export function safeErrorMessage(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : fallback;
+  const redacted = redactLogValue(message);
+  return typeof redacted === "string" && redacted.trim() ? redacted : fallback;
+}
+
 export function installGracefulShutdown(input: {
   service: string;
   cleanup?: () => void | Promise<void>;

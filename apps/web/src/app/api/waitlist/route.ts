@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createWaitlistRepository } from "@modeltruth/db";
+import { safeErrorMessage } from "@modeltruth/shared";
 
 export async function POST(request: Request) {
   try {
@@ -17,7 +18,7 @@ export async function POST(request: Request) {
       await repo.close();
     }
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "invalid waitlist signup" }, { status: 400 });
+    return NextResponse.json({ error: safeErrorMessage(error, "invalid waitlist signup") }, { status: 400 });
   }
 }
 

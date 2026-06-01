@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAuthRepository } from "@modeltruth/db";
+import { safeErrorMessage } from "@modeltruth/shared";
 
 export async function POST(request: Request) {
   try {
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
       await repo.close();
     }
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to create magic link" }, { status: 400 });
+    return NextResponse.json({ error: safeErrorMessage(error, "Unable to create magic link") }, { status: 400 });
   }
 }
 

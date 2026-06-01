@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createBillingRepository } from "@modeltruth/db";
+import { safeErrorMessage } from "@modeltruth/shared";
 import { verifyStripeWebhook, type StripeEvent } from "../../../../lib/stripe";
 import { processStripeEvent } from "../../../../lib/billing-webhook";
 
@@ -12,7 +13,7 @@ export async function POST(request: Request) {
   try {
     event = verifyStripeWebhook(rawBody, request.headers.get("stripe-signature"), secret);
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "invalid signature" }, { status: 400 });
+    return NextResponse.json({ error: safeErrorMessage(error, "invalid signature") }, { status: 400 });
   }
 
   const billing = await createBillingRepository();

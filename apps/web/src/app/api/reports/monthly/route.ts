@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildMonthlyAuditReport } from "@modeltruth/db";
+import { safeErrorMessage } from "@modeltruth/shared";
 import { getCurrentSession } from "../../../../lib/auth";
 import { canExportMonthlyAuditReport } from "../../../../lib/report-access";
 
@@ -23,7 +24,7 @@ export async function GET(request: Request) {
       }
     );
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "invalid report request" }, { status: 400 });
+    return NextResponse.json({ error: safeErrorMessage(error, "invalid report request") }, { status: 400 });
   }
 }
 

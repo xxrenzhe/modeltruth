@@ -3,7 +3,7 @@ import { lookup } from "node:dns/promises";
 import { getAuditSuite, runSmokeAudit } from "@modeltruth/audit-engine";
 import { createModelRegistryRepository, createPlaygroundQuotaRepository, saveAuditRun } from "@modeltruth/db";
 import { redactSecrets } from "@modeltruth/crypto";
-import { assertPublicResolvedAddresses, validatePublicHttpsUrl, writeJsonLog } from "@modeltruth/shared";
+import { assertPublicResolvedAddresses, safeErrorMessage, validatePublicHttpsUrl, writeJsonLog } from "@modeltruth/shared";
 
 export async function POST(request: Request) {
   try {
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
       }
     });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "audit failed" }, { status: 400 });
+    return NextResponse.json({ error: safeErrorMessage(error, "audit failed") }, { status: 400 });
   }
 }
 

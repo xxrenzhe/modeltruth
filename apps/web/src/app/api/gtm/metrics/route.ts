@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildGtmMetricsSnapshot } from "@modeltruth/db";
+import { safeErrorMessage } from "@modeltruth/shared";
 
 export async function GET(request: Request) {
   const configuredToken = process.env.MODELTRUTH_GTM_METRICS_TOKEN;
@@ -12,7 +13,7 @@ export async function GET(request: Request) {
     const snapshot = await buildGtmMetricsSnapshot({ windowDays });
     return NextResponse.json({ snapshot });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "invalid metrics request" }, { status: 400 });
+    return NextResponse.json({ error: safeErrorMessage(error, "invalid metrics request") }, { status: 400 });
   }
 }
 

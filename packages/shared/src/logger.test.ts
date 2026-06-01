@@ -5,6 +5,7 @@ import {
   isPublicHostname,
   redactLogValue,
   scrubObservabilityPayload,
+  safeErrorMessage,
   validatePublicHttpsUrl,
   writeJsonLog
 } from "./index";
@@ -69,6 +70,14 @@ describe("structured logger", () => {
       expect(serialized).not.toContain("otel.secret");
       expect(serialized).toContain("[REDACTED]");
     }
+  });
+
+  it("redacts sensitive fragments from API-safe error messages", () => {
+    const message = safeErrorMessage(new Error("provider rejected Authorization: Bearer abc.def and apiKey sk-error-secret-123456"), "audit failed");
+
+    expect(message).not.toContain("abc.def");
+    expect(message).not.toContain("sk-error-secret");
+    expect(message).toContain("[REDACTED]");
   });
 
   it("validates public HTTPS endpoints and blocks local, private and metadata hosts", () => {

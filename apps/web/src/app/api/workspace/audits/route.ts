@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuditSuite } from "@modeltruth/audit-engine";
 import { createJobRepository, createProviderNodeRepository } from "@modeltruth/db";
+import { safeErrorMessage } from "@modeltruth/shared";
 import { getCurrentSession } from "../../../../lib/auth";
 
 const manualWorkspaceSuites = new Set(["smoke", "reasoning-lite", "context-lite", "billing-lite"]);
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
       { status: duplicate ? 200 : 201 }
     );
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "invalid audit request" }, { status: 400 });
+    return NextResponse.json({ error: safeErrorMessage(error, "invalid audit request") }, { status: 400 });
   } finally {
     await nodes.close();
     await jobs.close();

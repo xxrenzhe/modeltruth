@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createBillingRepository } from "@modeltruth/db";
+import { safeErrorMessage } from "@modeltruth/shared";
 import { getCurrentSession } from "../../../../lib/auth";
 import { createStripeCheckoutSession, type BillingTier } from "../../../../lib/stripe";
 
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
       await billing.close();
     }
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "checkout failed" }, { status: 400 });
+    return NextResponse.json({ error: safeErrorMessage(error, "checkout failed") }, { status: 400 });
   }
 }
 

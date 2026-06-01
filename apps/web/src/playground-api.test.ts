@@ -92,6 +92,28 @@ describe("Playground audit API", () => {
     expect(body.error).toBe("Playground supports smoke@1.0.0, reasoning-lite@1.0.0 and context-lite@1.0.0 only");
   });
 
+  it("redacts sensitive fragments from Playground API error responses", async () => {
+    const harness = await createHarness();
+    const response = await POST(
+      new Request("http://localhost/api/playground/audit", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          baseUrl: "https://api.example.com/v1",
+          model: "gpt-5.1",
+          apiKey: "sk-route-secret-123456",
+          suiteId: "sk-route-secret-123456"
+        })
+      })
+    );
+    const body = await response.json();
+    harness.cleanup();
+
+    expect(response.status).toBe(400);
+    expect(body.error).not.toContain("sk-route-secret");
+    expect(body.error).toContain("sk-[REDACTED]");
+  });
+
   it("enforces the daily three-run Playground quota by IP and fingerprint before provider calls", async () => {
     const harness = await createHarness();
     const originalFetch = globalThis.fetch;

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createBillingRepository } from "@modeltruth/db";
+import { safeErrorMessage } from "@modeltruth/shared";
 import { getCurrentSession } from "../../../../lib/auth";
 import { createStripePortalSession } from "../../../../lib/stripe";
 
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(portal);
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "portal failed" }, { status: 400 });
+    return NextResponse.json({ error: safeErrorMessage(error, "portal failed") }, { status: 400 });
   } finally {
     await billing.close();
   }
