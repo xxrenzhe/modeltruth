@@ -11,6 +11,13 @@ import {
   isKnownProviderSlug,
   providers
 } from "@modeltruth/seo";
+import {
+  disputeStatusClass,
+  disputeStatusLabel,
+  requestTypeLabel,
+  reviewStatusClass,
+  reviewStatusLabel
+} from "../../../../lib/provider-dispute-display";
 
 export function generateStaticParams() {
   return providers.map((providerSlug) => ({ providerSlug }));
@@ -227,35 +234,6 @@ async function listProviderDisputes(providerSlug: string) {
   } finally {
     await repo.close();
   }
-}
-
-function reviewStatusLabel(disputes: Awaited<ReturnType<typeof listProviderDisputes>>) {
-  if (disputes.some((item) => item.status === "provider_response_attached")) return "Updated after review";
-  if (disputes.some((item) => item.status === "resolved")) return "Resolved";
-  if (disputes.some((item) => item.status === "under_review")) return "Under review";
-  return "No active dispute";
-}
-
-function reviewStatusClass(disputes: Awaited<ReturnType<typeof listProviderDisputes>>) {
-  if (disputes.some((item) => item.status === "provider_response_attached" || item.status === "resolved")) return "pass";
-  if (disputes.some((item) => item.status === "under_review")) return "warning";
-  return "muted";
-}
-
-function disputeStatusLabel(status: string) {
-  if (status === "provider_response_attached") return "Updated after review";
-  if (status === "resolved") return "Resolved";
-  return "Under review";
-}
-
-function disputeStatusClass(status: string) {
-  return status === "provider_response_attached" || status === "resolved" ? "pass" : "warning";
-}
-
-function requestTypeLabel(value: string | undefined) {
-  if (value === "takedown") return "Takedown request";
-  if (value === "provider_response") return "Provider response";
-  return "Correction request";
 }
 
 function riskFlagStatusLabel(value: string) {

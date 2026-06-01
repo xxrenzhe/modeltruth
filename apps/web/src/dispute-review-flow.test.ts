@@ -79,18 +79,20 @@ describe("dispute review flow", () => {
 
   it("renders database-backed provider review status on public provider boards", () => {
     const source = readFileSync("apps/web/src/app/[locale]/providers/[providerSlug]/page.tsx", "utf8");
+    const displayPolicy = readFileSync("apps/web/src/lib/provider-dispute-display.ts", "utf8");
 
     expect(source).toContain("createProviderDisputeRepository");
     expect(source).toContain("listProviderDisputes");
-    expect(source).toContain("provider_response_attached");
-    expect(source).toContain("Updated after review");
-    expect(source).toContain("Resolved");
-    expect(source).toContain("Under review");
+    expect(source).toContain("provider-dispute-display");
     expect(source).toContain("disputeStatusLabel");
     expect(source).toContain("reviewStatusClass");
     expect(source).toContain("requestTypeLabel");
-    expect(source).toContain("takedown");
     expect(source).toContain("POST /api/disputes");
+    expect(displayPolicy).toContain("provider_response_attached");
+    expect(displayPolicy).toContain("Updated after review");
+    expect(displayPolicy).toContain("Resolved");
+    expect(displayPolicy).toContain("Under review");
+    expect(displayPolicy).toContain("takedown");
   });
 
   it("renders Provider Truth/Risk subscription intake on public provider boards", () => {
