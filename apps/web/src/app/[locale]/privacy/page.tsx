@@ -42,6 +42,10 @@ export default function PrivacyPage() {
         </p>
         <section>
           <h2>Data categories we collect</h2>
+          <p>
+            Notice at Collection: ModelTruth collects the categories below to provide the product,
+            secure the service, process subscriptions and operate user-requested monitoring.
+          </p>
           <ul>
             <li>Account information: email address, workspace membership and session metadata.</li>
             <li>Subscription information: Stripe customer, plan, checkout and billing portal metadata.</li>
@@ -84,7 +88,8 @@ export default function PrivacyPage() {
             Vercel or similar processors are added later, this policy must be updated before use.
           </p>
           <p>
-            We do not sell personal information. Public dashboards show aggregated or redacted
+            We do not sell personal information, and we do not share personal information for
+            cross-context behavioral advertising. Public dashboards show aggregated or redacted
             technical evidence only, never user API keys, user accounts, full prompts or full completions.
           </p>
         </section>

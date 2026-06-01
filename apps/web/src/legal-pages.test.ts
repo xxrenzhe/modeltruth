@@ -32,7 +32,10 @@ describe("legal compliance pages", () => {
       "Stripe",
       "production PostgreSQL",
       "ClawCloud/GHCR",
-      "We do not sell personal information"
+      "Notice at Collection",
+      "We do not sell personal information",
+      "we do not share personal information for",
+      "cross-context behavioral advertising"
     ]) {
       expect(source).toContain(required);
     }
