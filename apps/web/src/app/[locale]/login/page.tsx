@@ -1,6 +1,24 @@
 import { getDictionary, type Locale } from "@modeltruth/i18n";
 import { LoginForm } from "./login-form";
 
+export async function generateMetadata({
+  params
+}: {
+  params: Promise<{ locale: Locale }>;
+}) {
+  const { locale } = await params;
+  const dictionary = getDictionary(locale);
+  return {
+    title: dictionary.login.title,
+    description: dictionary.login.lede,
+    robots: {
+      index: false,
+      follow: false,
+      googleBot: { index: false, follow: false }
+    }
+  };
+}
+
 export default async function LoginPage({
   params
 }: {
