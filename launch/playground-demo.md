@@ -9,4 +9,5 @@ Demo recording checklist:
 
 - Show that the API key field is not persisted after the run.
 - Show a successful smoke result and one warning/error state.
+- Show that report upload requires explicit consent.
 - End on the CTA to create a Pro workspace for continuous monitoring.

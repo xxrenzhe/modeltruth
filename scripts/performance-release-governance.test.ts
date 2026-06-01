@@ -69,6 +69,22 @@ describe("runPerformanceReleaseGovernance", () => {
     expect(result.ok).toBe(false);
     expect(result.issues).toContain("CLI package must expose bundled dist/index.js as the modeltruth binary");
   }, 20_000);
+
+  it("fails when public launch copy omits neutral disclosure and dispute intake", () => {
+    const cwd = mkBuildFixture();
+    writeFileSync(path.join(cwd, "launch", "product-hunt-assets.md"), "Product Hunt assets\n");
+
+    const result = runPerformanceReleaseGovernance({ cwd });
+    rmSync(cwd, { recursive: true, force: true });
+
+    expect(result.ok).toBe(false);
+    expect(result.issues).toContain(
+      "Launch material launch/product-hunt-assets.md missing required snippet: not legal conclusions"
+    );
+    expect(result.issues).toContain(
+      "Launch material launch/product-hunt-assets.md missing required snippet: dispute or correction"
+    );
+  }, 20_000);
 });
 
 function mkBuildFixture(options: { omitRoute?: string; cliBin?: string } = {}) {
@@ -142,9 +158,18 @@ function writeMetrics(cwd: string, metrics: Record<string, number>) {
 
 function writeLaunchFixture(cwd: string) {
   const launchDir = path.join(cwd, "launch");
-  writeFileSync(path.join(launchDir, "playground-demo.md"), "Playground demo\n");
-  writeFileSync(path.join(launchDir, "product-hunt-assets.md"), "Product Hunt assets\n");
-  writeFileSync(path.join(launchDir, "hacker-news-launch-comment.md"), "HN comment\n");
+  writeFileSync(
+    path.join(launchDir, "playground-demo.md"),
+    "Playground demo\ntemporary API key\nnot persisted\nredacted evidence summary\nexplicit consent\n"
+  );
+  writeFileSync(
+    path.join(launchDir, "product-hunt-assets.md"),
+    "Product Hunt assets\ntechnical signals\nnot legal conclusions\ndispute or correction\nexplicit upload consent\n"
+  );
+  writeFileSync(
+    path.join(launchDir, "hacker-news-launch-comment.md"),
+    "HN comment\navoids legal labels\nredacted aggregate signals\ncorrections or disputes\nencrypted keys\n"
+  );
   writeFileSync(
     path.join(launchDir, "anonymous-baseline-report.md"),
     "No raw endpoint path\nNo request headers\nNo request body\nanonymized audit run summary\n"

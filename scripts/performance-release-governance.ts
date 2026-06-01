@@ -273,6 +273,24 @@ function validateLaunchMaterials(cwd: string) {
 
 function validateLaunchMaterialContent(launchDir: string) {
   const requiredSnippets: Record<string, string[]> = {
+    "playground-demo.md": [
+      "temporary API key",
+      "not persisted",
+      "redacted evidence summary",
+      "explicit consent"
+    ],
+    "product-hunt-assets.md": [
+      "technical signals",
+      "not legal conclusions",
+      "dispute or correction",
+      "explicit upload consent"
+    ],
+    "hacker-news-launch-comment.md": [
+      "avoids legal labels",
+      "redacted aggregate signals",
+      "corrections or disputes",
+      "encrypted keys"
+    ],
     "anonymous-baseline-report.md": [
       "No raw endpoint path",
       "No request headers",

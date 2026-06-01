@@ -16,3 +16,5 @@ Launch bullets:
 - Stateless Playground for one-off OpenAI-compatible endpoint audits.
 - CLI-first workflow with explicit upload consent and redacted evidence.
 - Pro workspaces for encrypted private nodes, alerts and evidence exports.
+- Public claims are technical signals, not legal conclusions or supplier endorsements.
+- Providers can submit a dispute or correction from the public Dispute Policy.
