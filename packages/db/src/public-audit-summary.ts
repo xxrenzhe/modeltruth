@@ -204,11 +204,21 @@ function toPublicRiskFlag(run: AuditRunListItem, riskFlagStatuses: Map<string, {
     targetModelId: run.targetModelId,
     status: run.status,
     confidence: run.confidence,
-    metrics: run.metrics,
+    metrics: publicMetrics(run.metrics),
     assertions: publicAssertionSummary(run.assertions),
     evidenceSummary: publicEvidenceSummary(run.evidenceSummary),
     createdAt: run.createdAt
   };
+}
+
+function publicMetrics(value: unknown) {
+  const record = asRecord(value);
+  if (!record) return {};
+  const metrics = pickPublic(record, ["statusCode", "ttftMs", "totalLatencyMs", "tokenUsage", "billingVariance", "costEstimate"]);
+  if (metrics.tokenUsage) metrics.tokenUsage = publicUsage(metrics.tokenUsage);
+  if (metrics.billingVariance) metrics.billingVariance = publicBillingVariance(metrics.billingVariance);
+  if (metrics.costEstimate) metrics.costEstimate = pickRecord(metrics.costEstimate, ["inputCostUsd", "outputCostUsd", "totalCostUsd", "currency"]);
+  return stripUndefined(metrics) ?? {};
 }
 
 function publicAssertionSummary(value: unknown) {

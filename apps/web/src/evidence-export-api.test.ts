@@ -52,6 +52,11 @@ describe("Evidence export API", () => {
     expect(privateResponse.status).toBe(200);
     expect(privateBody.runs.map((run: { runId: string }) => run.runId)).toContain("run_visible");
     expect(privateBody.runs.map((run: { runId: string }) => run.runId)).not.toContain("run_hidden");
+    expect(privateBody.runs[0]).not.toHaveProperty("assertions");
+    expect(privateBody.runs[0]).not.toHaveProperty("evidenceSummary");
+    expect(JSON.stringify(privateBody)).not.toContain("full prompt should not export");
+    expect(JSON.stringify(privateBody)).not.toContain("full completion should not export");
+    expect(JSON.stringify(privateBody)).not.toContain("sk-export-secret");
     expect(publicResponse.status).toBe(200);
     expect(JSON.stringify(publicBody)).not.toContain(session.workspace.id);
     expect(JSON.stringify(publicBody)).not.toContain("ws_other");

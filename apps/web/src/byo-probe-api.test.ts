@@ -47,9 +47,24 @@ describe("BYO probe API", () => {
             modelId: "gpt-5.1",
             status: "warning",
             confidence: 0.86,
-            metrics: { statusCode: 200, ttftMs: 1200 },
-            assertions: [{ id: "REGIONAL_LATENCY", status: "warning" }],
-            evidenceSummary: { completionHash: "hash", apiKey: "sk-should-redact-123456" }
+            metrics: {
+              statusCode: 200,
+              ttftMs: 1200,
+              rawEndpoint: "https://private-node.example.com/v1/chat/completions"
+            },
+            assertions: [{ id: "REGIONAL_LATENCY", status: "warning", prompt: "raw prompt should not be stored" }],
+            evidenceSummary: {
+              completionHash: "hash",
+              apiKey: "sk-should-redact-123456",
+              rawEndpoint: "https://private-node.example.com/v1/chat/completions",
+              prompt: "raw prompt should not be stored",
+              completion: "raw completion should not be stored",
+              storedHeaders: {
+                "content-type": "application/json",
+                authorization: "Bearer sk-should-redact-123456",
+                "x-private-routing": "private route"
+              }
+            }
           }
         })
       })
@@ -78,7 +93,12 @@ describe("BYO probe API", () => {
       status: "warning"
     });
     expect(evidence?.evidenceSummary).toMatchObject({ externalProbe: true, probeRegion: "ap-northeast-1" });
-    expect(JSON.stringify(evidence)).not.toContain("sk-should-redact");
+    const serializedEvidence = JSON.stringify(evidence);
+    expect(serializedEvidence).not.toContain("sk-should-redact");
+    expect(serializedEvidence).not.toContain("private-node.example.com");
+    expect(serializedEvidence).not.toContain("raw prompt should not be stored");
+    expect(serializedEvidence).not.toContain("raw completion should not be stored");
+    expect(serializedEvidence).not.toContain("x-private-routing");
   });
 
   it("blocks BYO probe registration for non-Team workspaces", async () => {

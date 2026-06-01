@@ -123,7 +123,13 @@ describe("audit run evidence persistence", () => {
       targetModelId: "claude",
       status: "warning",
       confidence: 0.91,
-      metrics: { ttftMs: 940, statusCode: 200 },
+      metrics: {
+        ttftMs: 940,
+        statusCode: 200,
+        rawEndpoint: "https://private-metrics.example.com/v1/chat/completions",
+        requestHeaders: { authorization: "Bearer sk-public-summary-leak" },
+        rawPrompt: "private metrics prompt"
+      },
       assertions: [{ id: "CONTEXT_NEEDLE_RETRIEVAL", status: "warning" }],
       evidenceSummary: { requestBodyStored: false }
     });
@@ -231,8 +237,11 @@ describe("audit run evidence persistence", () => {
     expect(JSON.stringify(summary.riskFlags)).not.toContain("authorization");
     expect(JSON.stringify(summary.riskFlags)).not.toContain("set-cookie");
     expect(JSON.stringify(summary.riskFlags)).not.toContain("rawPrompt");
+    expect(JSON.stringify(summary.riskFlags)).not.toContain("private-metrics.example.com");
+    expect(JSON.stringify(summary.riskFlags)).not.toContain("private metrics prompt");
     expect(JSON.stringify(summary.riskFlags)).not.toContain("total_tokens");
     expect(JSON.stringify(summary.riskFlags)).not.toContain("sk-public-summary-leak");
+    expect(summary.riskFlags.find((run) => run.runId === "run_high_confidence_risk")?.metrics).toEqual({ statusCode: 200, ttftMs: 940 });
     expect(summary.riskFlags.find((run) => run.runId === "run_high_confidence_risk")?.evidenceSummary).toMatchObject({ requestBodyStored: false });
     expect(resolvedSummary.riskFlags).toHaveLength(0);
     expect(JSON.stringify(summary.riskFlags)).not.toContain("private completion");
