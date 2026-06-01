@@ -59,6 +59,7 @@ export default function PrivacyPage() {
           <ul>
             <li>Free Playground API keys are used only for the current run and are not written to the database or application logs.</li>
             <li>Complete request bodies, complete prompts and complete completions are not stored in evidence packages.</li>
+            <li>Web visit telemetry is off by default until the visitor explicitly allows anonymous product metrics.</li>
             <li>CLI telemetry is off by default and upload requires explicit consent.</li>
           </ul>
         </section>
@@ -67,6 +68,7 @@ export default function PrivacyPage() {
           <ul>
             <li>Provide API audit, monitoring, alerting and evidence export under contract performance.</li>
             <li>Operate abuse prevention, security monitoring, reliability and product integrity under legitimate interest.</li>
+            <li>Process anonymous web visit telemetry only with opt-in consent; it records coarse surfaces, not raw paths, API keys, prompts or completions.</li>
             <li>Process CLI telemetry only with user consent, which can be withdrawn by disabling telemetry uploads.</li>
           </ul>
         </section>
@@ -74,6 +76,7 @@ export default function PrivacyPage() {
           <h2>Retention</h2>
           <div className="metricGrid legalGrid">
             <div className="metric">Free Playground runs: no raw content; anonymous metrics are aggregated or deleted within 24 hours.</div>
+            <div className="metric">Opt-in web visit telemetry: stored as hashed visitor identifiers and coarse product surfaces for aggregated launch metrics.</div>
             <div className="metric">Pro evidence: retained for 30 days unless the user deletes related workspace data earlier.</div>
             <div className="metric">Aggregated metrics: retained up to 365 days after de-identification.</div>
             <div className="metric">Stripe billing metadata: retained according to Stripe, accounting and tax requirements.</div>
