@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" role="img" aria-label="ModelTruth public dashboard launch asset">
+  <rect width="1200" height="630" fill="#0f172a"/>
+  <text x="80" y="140" fill="#f8fafc" font-family="serif" font-size="64">Provider Truth Board</text>
+  <text x="80" y="230" fill="#93c5fd" font-family="serif" font-size="36">Evidence signals, not legal conclusions.</text>
+  <rect x="80" y="310" width="1040" height="180" rx="28" fill="#1e293b"/>
+  <text x="130" y="385" fill="#f8fafc" font-family="monospace" font-size="34">Uptime 99% / Evidence score 84 / Risk flags 2</text>
+</svg>

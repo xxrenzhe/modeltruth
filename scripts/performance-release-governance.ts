@@ -43,7 +43,7 @@ const defaultOptions: ReleaseGateOptions = {
   maxDashboardP95Ms: Number(process.env.RELEASE_MAX_DASHBOARD_P95_MS ?? 1500),
   maxPlaygroundSmokeP95Ms: Number(process.env.RELEASE_MAX_PLAYGROUND_SMOKE_P95_MS ?? 60_000),
   maxDashboardFreshnessSeconds: Number(process.env.RELEASE_MAX_DASHBOARD_FRESHNESS_SECONDS ?? 600),
-  metricsPath: process.env.RELEASE_METRICS_PATH ?? "docs/launch/release-slo-baseline.json"
+  metricsPath: process.env.RELEASE_METRICS_PATH ?? "launch/release-slo-baseline.json"
 };
 
 export function runPerformanceReleaseGovernance(input: Partial<ReleaseGateOptions> = {}): ReleaseGateResult {
@@ -241,16 +241,18 @@ function validateCliPackContents(cwd: string, cliDir: string) {
 }
 
 function validateLaunchMaterials(cwd: string) {
-  const launchDir = path.join(cwd, "docs", "launch");
+  const launchDir = path.join(cwd, "launch");
   const issues: string[] = [];
   const requiredFiles = [
     "playground-demo.md",
     "product-hunt-assets.md",
     "hacker-news-launch-comment.md",
-    "faq.md"
+    "faq.md",
+    "anonymous-baseline-report.md",
+    "beta-transparency-changelog.md"
   ];
   for (const file of requiredFiles) {
-    if (!existsSync(path.join(launchDir, file))) issues.push(`Missing launch material: docs/launch/${file}`);
+    if (!existsSync(path.join(launchDir, file))) issues.push(`Missing launch material: launch/${file}`);
   }
   const faqPath = path.join(launchDir, "faq.md");
   if (existsSync(faqPath)) {
@@ -261,9 +263,35 @@ function validateLaunchMaterials(cwd: string) {
   const blogCount = existsSync(blogDir) ? readdirSync(blogDir).filter((file) => file.endsWith(".md")).length : 0;
   if (blogCount < 3) issues.push(`Launch blog must contain at least 3 posts, found ${blogCount}`);
   for (const asset of ["dashboard-screenshot.svg", "playground-demo.svg", "product-hunt-gallery.svg"]) {
-    if (!existsSync(path.join(launchDir, "assets", asset))) issues.push(`Missing launch asset: docs/launch/assets/${asset}`);
+    if (!existsSync(path.join(launchDir, "assets", asset))) issues.push(`Missing launch asset: launch/assets/${asset}`);
   }
+  issues.push(...validateLaunchMaterialContent(launchDir));
   return issues;
+}
+
+function validateLaunchMaterialContent(launchDir: string) {
+  const requiredSnippets: Record<string, string[]> = {
+    "anonymous-baseline-report.md": [
+      "No raw endpoint path",
+      "No request headers",
+      "No request body",
+      "anonymized audit run summary"
+    ],
+    "beta-transparency-changelog.md": [
+      "CLI telemetry remains off by default",
+      "consent=true",
+      "48-hour response target",
+      "not endorsements or legal conclusions"
+    ]
+  };
+  return Object.entries(requiredSnippets).flatMap(([file, snippets]) => {
+    const fullPath = path.join(launchDir, file);
+    if (!existsSync(fullPath)) return [];
+    const source = readFileSync(fullPath, "utf8");
+    return snippets
+      .filter((snippet) => !source.includes(snippet))
+      .map((snippet) => `Launch material launch/${file} missing required snippet: ${snippet}`);
+  });
 }
 
 function main() {

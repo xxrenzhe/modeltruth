@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" role="img" aria-label="ModelTruth playground demo launch asset">
+  <rect width="1200" height="630" fill="#082f49"/>
+  <text x="80" y="140" fill="#ecfeff" font-family="serif" font-size="64">Stateless API Playground</text>
+  <text x="80" y="230" fill="#bae6fd" font-family="serif" font-size="36">Run a smoke audit without storing API keys.</text>
+  <rect x="80" y="310" width="1040" height="180" rx="28" fill="#0e7490"/>
+  <text x="130" y="385" fill="#ecfeff" font-family="monospace" font-size="34">status: warning / ttft: 820ms / redaction: applied</text>
+</svg>

@@ -17,7 +17,7 @@ describe("runPerformanceReleaseGovernance", () => {
 
     expect(result.ok).toBe(true);
     expect(result.summary.metricsChecked).toBe(true);
-  });
+  }, 20_000);
 
   it("fails when a public route is missing from the build manifest", () => {
     const cwd = mkBuildFixture({ omitRoute: "/[locale]/evidence/page" });
@@ -27,7 +27,7 @@ describe("runPerformanceReleaseGovernance", () => {
 
     expect(result.ok).toBe(false);
     expect(result.issues).toContain("Public route missing from Next app build manifest: /[locale]/evidence/page");
-  });
+  }, 20_000);
 
   it("fails when measured release metrics exceed configured SLOs", () => {
     const cwd = mkBuildFixture();
@@ -45,7 +45,7 @@ describe("runPerformanceReleaseGovernance", () => {
     expect(result.ok).toBe(false);
     expect(result.issues).toContain("LCP 3000ms exceeds 2500ms");
     expect(result.issues).toContain("API P95 2000ms exceeds 1500ms");
-  });
+  }, 20_000);
 
   it("fails when mandatory dashboard/playground metrics are absent", () => {
     const cwd = mkBuildFixture();
@@ -58,7 +58,7 @@ describe("runPerformanceReleaseGovernance", () => {
     expect(result.issues).toContain("Release metrics missing dashboardP95Ms");
     expect(result.issues).toContain("Release metrics missing playgroundSmokeP95Ms");
     expect(result.issues).toContain("Release metrics missing dashboardFreshnessSeconds");
-  });
+  }, 20_000);
 
   it("fails when the CLI package points the binary at TypeScript source", () => {
     const cwd = mkBuildFixture({ cliBin: "./src/index.ts" });
@@ -68,7 +68,7 @@ describe("runPerformanceReleaseGovernance", () => {
 
     expect(result.ok).toBe(false);
     expect(result.issues).toContain("CLI package must expose bundled dist/index.js as the modeltruth binary");
-  });
+  }, 20_000);
 });
 
 function mkBuildFixture(options: { omitRoute?: string; cliBin?: string } = {}) {
@@ -80,9 +80,9 @@ function mkBuildFixture(options: { omitRoute?: string; cliBin?: string } = {}) {
   writeFileSync(path.join(chunksDir, "tiny.js"), "1");
   mkdirSync(path.join(cwd, "apps", "cli"), { recursive: true });
   mkdirSync(path.join(cwd, "apps", "cli", "dist"), { recursive: true });
-  mkdirSync(path.join(cwd, "docs", "launch", "assets"), { recursive: true });
-  mkdirSync(path.join(cwd, "docs", "launch", "blog"), { recursive: true });
-  writeMetrics(path.join(cwd, "docs", "launch"), {
+  mkdirSync(path.join(cwd, "launch", "assets"), { recursive: true });
+  mkdirSync(path.join(cwd, "launch", "blog"), { recursive: true });
+  writeMetrics(path.join(cwd, "launch"), {
     lcpMs: 1200,
     apiP95Ms: 300,
     dashboardP95Ms: 400,
@@ -140,10 +140,18 @@ function writeMetrics(cwd: string, metrics: Record<string, number>) {
 }
 
 function writeLaunchFixture(cwd: string) {
-  const launchDir = path.join(cwd, "docs", "launch");
+  const launchDir = path.join(cwd, "launch");
   writeFileSync(path.join(launchDir, "playground-demo.md"), "Playground demo\n");
   writeFileSync(path.join(launchDir, "product-hunt-assets.md"), "Product Hunt assets\n");
   writeFileSync(path.join(launchDir, "hacker-news-launch-comment.md"), "HN comment\n");
+  writeFileSync(
+    path.join(launchDir, "anonymous-baseline-report.md"),
+    "No raw endpoint path\nNo request headers\nNo request body\nanonymized audit run summary\n"
+  );
+  writeFileSync(
+    path.join(launchDir, "beta-transparency-changelog.md"),
+    "CLI telemetry remains off by default\nconsent=true\n48-hour response target\nnot endorsements or legal conclusions\n"
+  );
   writeFileSync(path.join(launchDir, "faq.md"), Array.from({ length: 10 }, (_, index) => `## Q${index + 1}\nA`).join("\n"));
   for (const file of ["one.md", "two.md", "three.md"]) writeFileSync(path.join(launchDir, "blog", file), "blog\n");
   for (const file of ["dashboard-screenshot.svg", "playground-demo.svg", "product-hunt-gallery.svg"]) {

@@ -4,6 +4,7 @@ import {
   installGracefulShutdown,
   isPublicHostname,
   redactLogValue,
+  scrubObservabilityPayload,
   validatePublicHttpsUrl,
   writeJsonLog
 } from "./index";
@@ -51,6 +52,23 @@ describe("structured logger", () => {
       headers: { "x-api-key": "[REDACTED]" },
       text: "Bearer [REDACTED]"
     });
+  });
+
+  it("scrubs Sentry, Axiom and OpenTelemetry payloads before export", () => {
+    const payload = {
+      request: { headers: { authorization: "Bearer abc.def", "x-api-key": "sk-observability-secret" } },
+      tags: { apiKey: "sk-tag-secret-123456", route: "/api/playground/audit" },
+      resource: { attributes: { "http.request.header.authorization": "Bearer otel.secret" } }
+    };
+
+    for (const sink of ["sentry", "axiom", "opentelemetry"] as const) {
+      const serialized = JSON.stringify(scrubObservabilityPayload(sink, payload));
+      expect(serialized).not.toContain("abc.def");
+      expect(serialized).not.toContain("sk-observability-secret");
+      expect(serialized).not.toContain("sk-tag-secret");
+      expect(serialized).not.toContain("otel.secret");
+      expect(serialized).toContain("[REDACTED]");
+    }
   });
 
   it("validates public HTTPS endpoints and blocks local, private and metadata hosts", () => {

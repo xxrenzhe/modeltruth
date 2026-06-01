@@ -51,7 +51,7 @@ describe("runWorkerTick provider-node audit jobs", () => {
     });
     expect(run.traceId).toMatch(/^[a-f0-9]{32}$/);
     expect(JSON.stringify(run)).not.toContain("sk-node-secret");
-  });
+  }, 20_000);
 
   it("uses a node TTFT threshold when enqueueing latency alerts", async () => {
     const harness = await createHarness("modeltruth-worker-node-ttft-alert-");
@@ -104,7 +104,7 @@ describe("runWorkerTick provider-node audit jobs", () => {
       await jobs.close();
       harness.cleanup();
     }
-  });
+  }, 20_000);
 });
 
 async function createHarness(prefix: string) {

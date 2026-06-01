@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" role="img" aria-label="ModelTruth Product Hunt gallery launch asset">
+  <rect width="1200" height="630" fill="#431407"/>
+  <text x="80" y="140" fill="#fff7ed" font-family="serif" font-size="64">ModelTruth.ai</text>
+  <text x="80" y="230" fill="#fed7aa" font-family="serif" font-size="36">AI API availability, authenticity and billing monitoring.</text>
+  <rect x="80" y="310" width="1040" height="180" rx="28" fill="#9a3412"/>
+  <text x="130" y="385" fill="#fff7ed" font-family="monospace" font-size="34">CLI + Playground + Provider Truth Board</text>
+</svg>

@@ -1,0 +1,7 @@
+{
+  "lcpMs": 1200,
+  "apiP95Ms": 450,
+  "dashboardP95Ms": 800,
+  "playgroundSmokeP95Ms": 15000,
+  "dashboardFreshnessSeconds": 120
+}

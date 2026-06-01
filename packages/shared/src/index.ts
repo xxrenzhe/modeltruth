@@ -18,8 +18,9 @@ export interface StructuredLogEvent {
 }
 
 export type DnsLookup = (hostname: string) => Promise<Array<{ address: string }>>;
+export type ObservabilitySink = "sentry" | "axiom" | "opentelemetry";
 
-const sensitiveKeys = new Set(["apikey", "api_key", "authorization", "x-api-key", "token", "secret", "password"]);
+const sensitiveKeyPattern = /(^|[._-])(api[-_]?key|authorization|x[-_]?api[-_]?key|auth[-_]?token|access[-_]?token|refresh[-_]?token|session[-_]?token|token|secret|password)($|[._-])/i;
 
 export function writeJsonLog(input: StructuredLogEvent, sink: Pick<Console, "log" | "error" | "warn"> = console) {
   const level = input.level ?? "info";
@@ -45,9 +46,17 @@ export function redactLogValue(value: unknown): unknown {
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
       key,
-      sensitiveKeys.has(key.toLowerCase()) ? "[REDACTED]" : redactLogValue(entry)
+      isSensitiveLogKey(key) ? "[REDACTED]" : redactLogValue(entry)
     ])
   );
+}
+
+export function scrubObservabilityPayload<T>(sink: ObservabilitySink, payload: T): T {
+  const scrubbed = redactLogValue(payload) as T;
+  if (!["sentry", "axiom", "opentelemetry"].includes(sink)) {
+    throw new Error("unsupported observability sink");
+  }
+  return scrubbed;
 }
 
 export function installGracefulShutdown(input: {
@@ -118,4 +127,8 @@ function redactString(value: string) {
   return value
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
     .replace(/\bsk-[A-Za-z0-9._-]{6,}\b/g, "sk-[REDACTED]");
+}
+
+function isSensitiveLogKey(key: string) {
+  return sensitiveKeyPattern.test(`.${key.toLowerCase()}.`);
 }
