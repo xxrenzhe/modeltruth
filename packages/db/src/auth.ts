@@ -167,6 +167,24 @@ class SqliteAuthRepository implements AuthRepository {
           .run(now, now, workspace.id);
         this.db.prepare("delete from alert_channels where workspace_id = ?").run(workspace.id);
         this.db.prepare("delete from jobs where payload_json like ?").run(`%"workspaceId":"${workspace.id}"%`);
+        this.db
+          .prepare(
+            `update evidence_packages
+             set redacted_summary_json = ?
+             where run_id in (select id from audit_runs where workspace_id = ?)`
+          )
+          .run(JSON.stringify(accountDeletionRedactedEvidenceSummary(now)), workspace.id);
+        this.db
+          .prepare(
+            `update audit_runs
+             set workspace_id = null,
+                 node_id = null,
+                 assertions_json = '[]',
+                 evidence_summary_json = ?
+             where workspace_id = ?`
+          )
+          .run(JSON.stringify(accountDeletionRedactedEvidenceSummary(now)), workspace.id);
+        this.db.prepare("update risk_flags set workspace_id = null, node_id = null, updated_at = ? where workspace_id = ?").run(now, workspace.id);
       }
       this.db.prepare("delete from provider_subscriptions where email = ?").run(user.email);
       this.db.prepare("delete from auth_sessions where user_id = ?").run(userId);
@@ -331,6 +349,20 @@ class PostgresAuthRepository implements AuthRepository {
         `;
         await tx`delete from alert_channels where workspace_id = ${workspace.id}`;
         await tx`delete from jobs where payload_json like ${`%"workspaceId":"${workspace.id}"%`}`;
+        await tx`
+          update evidence_packages
+          set redacted_summary_json = ${tx.json(accountDeletionRedactedEvidenceSummary(now))}
+          where run_id in (select id from audit_runs where workspace_id = ${workspace.id})
+        `;
+        await tx`
+          update audit_runs
+          set workspace_id = null,
+              node_id = null,
+              assertions_json = '[]'::jsonb,
+              evidence_summary_json = ${tx.json(accountDeletionRedactedEvidenceSummary(now))}
+          where workspace_id = ${workspace.id}
+        `;
+        await tx`update risk_flags set workspace_id = null, node_id = null, updated_at = ${now} where workspace_id = ${workspace.id}`;
       }
       await tx`delete from provider_subscriptions where email = ${user.email}`;
       await tx`delete from auth_sessions where user_id = ${userId}`;
@@ -433,6 +465,14 @@ function nowIso() {
 
 function addSeconds(iso: string, seconds: number) {
   return new Date(new Date(iso).getTime() + seconds * 1000).toISOString();
+}
+
+function accountDeletionRedactedEvidenceSummary(deletedAt: string) {
+  return {
+    accountDeletionRedacted: true,
+    deletedAt,
+    reason: "account deletion removed private evidence and workspace identifiers; aggregate metrics retained"
+  };
 }
 
 function emailName(email: string) {

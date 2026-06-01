@@ -138,14 +138,20 @@ describe("AuthRepository", () => {
       providerNodesWithKeyMaterial: 0,
       alertChannels: 0,
       providerSubscriptions: 0,
-      jobsWithWorkspacePayload: 0
+      jobsWithWorkspacePayload: 0,
+      auditRunsWithWorkspaceId: 0,
+      auditRunsWithNodeId: 0,
+      auditRunsWithPrivateEvidence: 0,
+      riskFlagsWithWorkspaceId: 0,
+      riskFlagsWithNodeId: 0,
+      evidencePackagesWithPrivateEvidence: 0
     });
   });
 });
 
 async function createDeleteFixtures(workspaceId: string) {
   const nodes = await createProviderNodeRepository();
-  await nodes.create({
+  const node = await nodes.create({
     workspaceId,
     name: "Delete target",
     baseUrl: "https://api.example.com/v1",
@@ -172,6 +178,37 @@ async function createDeleteFixtures(workspaceId: string) {
   const jobs = await createJobRepository();
   await jobs.enqueue({ type: "deepAudit", payload: { workspaceId, apiKey: "sk-delete-secret" } });
   await jobs.close();
+
+  await saveAuditRun({
+    id: "delete_private_run_1",
+    workspaceId,
+    nodeId: node.id,
+    providerSlug: "openai",
+    suiteId: "smoke",
+    suiteVersion: "1.0.0",
+    runType: "deepAudit",
+    targetModelId: "gpt-5.1",
+    status: "warning",
+    confidence: 0.82,
+    metrics: { ttftMs: 100, privateCost: "customer invoice detail" },
+    assertions: [{ id: "HTTP_STATUS_OK", status: "warning", message: "private endpoint warning" }],
+    evidenceSummary: { fullResponse: "private completion for delete account", responseBodyStored: true, apiKey: "sk-delete-secret" }
+  });
+  await saveAuditRun({
+    id: "delete_private_run_2",
+    workspaceId,
+    nodeId: node.id,
+    providerSlug: "openai",
+    suiteId: "smoke",
+    suiteVersion: "1.0.0",
+    runType: "deepAudit",
+    targetModelId: "gpt-5.1",
+    status: "warning",
+    confidence: 0.83,
+    metrics: { ttftMs: 110, privateCost: "customer invoice detail" },
+    assertions: [{ id: "HTTP_STATUS_OK", status: "warning", message: "private endpoint warning" }],
+    evidenceSummary: { fullResponse: "private completion for delete account", responseBodyStored: true, apiKey: "sk-delete-secret" }
+  });
 }
 
 function countDeleteResiduals(databasePath: string, workspaceId: string, email: string) {
@@ -187,13 +224,20 @@ function countDeleteResiduals(databasePath: string, workspaceId: string, email: 
       ),
       alertChannels: count(db, "select count(*) as count from alert_channels where workspace_id = ?", workspaceId),
       providerSubscriptions: count(db, "select count(*) as count from provider_subscriptions where email = ?", email),
-      jobsWithWorkspacePayload: count(db, "select count(*) as count from jobs where payload_json like ?", `%"workspaceId":"${workspaceId}"%`)
+      jobsWithWorkspacePayload: count(db, "select count(*) as count from jobs where payload_json like ?", `%"workspaceId":"${workspaceId}"%`),
+      auditRunsWithWorkspaceId: count(db, "select count(*) as count from audit_runs where workspace_id = ?", workspaceId),
+      auditRunsWithNodeId: count(db, "select count(*) as count from audit_runs where node_id is not null"),
+      auditRunsWithPrivateEvidence: count(db, "select count(*) as count from audit_runs where evidence_summary_json like ?", "%private completion%"),
+      riskFlagsWithWorkspaceId: count(db, "select count(*) as count from risk_flags where workspace_id = ?", workspaceId),
+      riskFlagsWithNodeId: count(db, "select count(*) as count from risk_flags where node_id is not null"),
+      evidencePackagesWithPrivateEvidence: count(db, "select count(*) as count from evidence_packages where redacted_summary_json like ?", "%private completion%")
     };
   } finally {
     db.close();
   }
 }
 
-function count(db: DatabaseSync, sql: string, param: string) {
-  return (db.prepare(sql).get(param) as { count: number }).count;
+function count(db: DatabaseSync, sql: string, param?: string) {
+  const row = (param === undefined ? db.prepare(sql).get() : db.prepare(sql).get(param)) as { count: number } | undefined;
+  return row?.count ?? 0;
 }
