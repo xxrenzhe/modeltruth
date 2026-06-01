@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { validatePublicHttpsUrl } from "@modeltruth/shared";
 
 interface WorkspaceLabels {
   name: string;
@@ -112,12 +113,14 @@ export function WorkspaceClient({ labels }: { labels: WorkspaceLabels }) {
     setError("");
     setNotice("");
     try {
+      const baseUrl = String(formData.get("baseUrl") ?? "");
+      validatePublicHttpsUrl(baseUrl, "Base URL");
       const response = await fetch("/api/workspace/nodes", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           name: formData.get("name"),
-          baseUrl: formData.get("baseUrl"),
+          baseUrl,
           modelId: formData.get("modelId"),
           apiKey: formData.get("apiKey"),
           heartbeatIntervalSeconds: Number(formData.get("heartbeatIntervalSeconds") ?? 300),
