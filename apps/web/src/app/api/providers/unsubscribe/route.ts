@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseProviderUnsubscribeToken } from "@modeltruth/crypto";
 import { createProviderSubscriptionRepository } from "@modeltruth/db";
 import { safeErrorMessage } from "@modeltruth/shared";
 import {
@@ -9,8 +10,21 @@ import {
   parseSubscriptionEmail
 } from "../subscription-input";
 
+type ProviderUnsubscribeInput = {
+  providerSlug?: unknown;
+  email?: unknown;
+  notificationType?: unknown;
+};
+
 export async function GET(request: Request) {
-  return unsubscribe(parseProviderSubscriptionQuery(request));
+  try {
+    const query = parseProviderSubscriptionQuery(request);
+    const token = typeof query.token === "string" ? query.token : "";
+    if (!token) throw new Error("unsubscribe token is required");
+    return await unsubscribe(parseProviderUnsubscribeToken(token));
+  } catch (error) {
+    return NextResponse.json({ error: safeErrorMessage(error, "invalid unsubscribe request") }, { status: 400 });
+  }
 }
 
 export async function POST(request: Request) {
@@ -21,7 +35,7 @@ export async function POST(request: Request) {
   }
 }
 
-async function unsubscribe(body: Record<string, unknown>) {
+async function unsubscribe(body: ProviderUnsubscribeInput) {
   try {
     const providerSlug = parseProviderSlug(body.providerSlug);
     const email = parseSubscriptionEmail(body.email);

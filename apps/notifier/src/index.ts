@@ -1,4 +1,4 @@
-import { decryptSecret } from "@modeltruth/crypto";
+import { createProviderUnsubscribeToken, decryptSecret } from "@modeltruth/crypto";
 import { createAlertChannelRepository, createJobRepository, ensureDatabaseReady } from "@modeltruth/db";
 import { installGracefulShutdown, redactLogValue, writeJsonLog } from "@modeltruth/shared";
 
@@ -194,9 +194,14 @@ function emailWebhookUrl() {
 
 function providerUnsubscribeUrl(payload: ProviderDigestPayload, email: string) {
   const url = new URL("/api/providers/unsubscribe", publicAppUrl());
-  url.searchParams.set("providerSlug", payload.providerSlug);
-  url.searchParams.set("email", email);
-  url.searchParams.set("notificationType", payload.notificationType);
+  url.searchParams.set(
+    "token",
+    createProviderUnsubscribeToken({
+      providerSlug: payload.providerSlug,
+      email,
+      notificationType: payload.notificationType
+    })
+  );
   return url.toString();
 }
 

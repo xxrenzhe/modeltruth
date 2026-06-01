@@ -15,7 +15,12 @@ export async function generateMetadata({
   });
 }
 
-export default function PrivacyPage() {
+export default async function PrivacyPage({
+  params
+}: {
+  params: Promise<{ locale: Locale }>;
+}) {
+  const { locale } = await params;
   return (
     <>
       <script
@@ -51,7 +56,7 @@ export default function PrivacyPage() {
             <li>Subscription information: Stripe customer, plan, checkout and billing portal metadata.</li>
             <li>Node configuration: provider name, Base URL, model id, schedule settings and encrypted API key ciphertext for Pro nodes.</li>
             <li>Audit metrics: suite id/version, status, confidence, latency, usage metadata, assertion summaries and redacted evidence hashes.</li>
-            <li>Alert settings: webhook, Slack, Discord or email targets stored encrypted or routed through configured processors.</li>
+            <li>Alert settings: webhook, Slack, Discord, Telegram or email targets stored encrypted or routed through configured processors.</li>
           </ul>
         </section>
         <section>
@@ -87,7 +92,7 @@ export default function PrivacyPage() {
           <h2>Processors and disclosures</h2>
           <p>
             ModelTruth may use Stripe, the production PostgreSQL hosting provider, ClawCloud/GHCR,
-            email delivery providers and user-configured alert channels. If Supabase, Cloudflare,
+            email delivery providers, Telegram Bot API for Telegram alerts and user-configured alert channels. If Supabase, Cloudflare,
             Vercel or similar processors are added later, this policy must be updated before use.
           </p>
           <p>
@@ -107,7 +112,7 @@ export default function PrivacyPage() {
         <section>
           <h2>Your rights</h2>
           <p>
-            You may request access, export or deletion from <a href="/en/settings/privacy">Privacy settings</a>.
+            You may request access, export or deletion from <a href={`/${locale}/settings/privacy`}>Privacy settings</a>.
             You may also contact compliance@modeltruth.ai for privacy requests or to withdraw CLI telemetry consent.
           </p>
         </section>

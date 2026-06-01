@@ -29,6 +29,8 @@ describe("legal compliance pages", () => {
       "Subscription information",
       "Audit metrics",
       "Data we do not collect",
+      "Telegram",
+      "Telegram Bot API",
       "Web visit telemetry is off by default",
       "anonymous product metrics",
       "anonymous web visit telemetry only with opt-in consent",

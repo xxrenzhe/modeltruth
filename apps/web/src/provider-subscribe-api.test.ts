@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { createProviderUnsubscribeToken } from "@modeltruth/crypto";
 import { createProviderSubscriptionRepository, ensureSqliteReady } from "@modeltruth/db";
 import { POST } from "./app/api/providers/subscribe/route";
 import { GET as unsubscribeGet, POST as unsubscribe } from "./app/api/providers/unsubscribe/route";
@@ -91,11 +92,14 @@ describe("provider subscribe API", () => {
     const repo = await createProviderSubscriptionRepository();
     await repo.create({ providerSlug: "openrouter", email: "digest@example.com", notificationType: "weekly_digest" });
     await repo.close();
+    const token = createProviderUnsubscribeToken({
+      providerSlug: "openrouter",
+      email: "digest@example.com",
+      notificationType: "weekly_digest"
+    });
 
     const response = await unsubscribeGet(
-      new Request(
-        "http://localhost/api/providers/unsubscribe?providerSlug=openrouter&email=digest%40example.com&notificationType=weekly_digest"
-      )
+      new Request(`http://localhost/api/providers/unsubscribe?token=${encodeURIComponent(token)}`)
     );
     const body = await response.json();
     const check = await createProviderSubscriptionRepository();
@@ -105,6 +109,19 @@ describe("provider subscribe API", () => {
     expect(response.status).toBe(200);
     expect(body.subscription).toEqual({ providerSlug: "openrouter", notificationType: "weekly_digest", status: "unsubscribed" });
     expect(subscriptions).toHaveLength(0);
+  });
+
+  it("rejects one-click GET unsubscribe links that expose raw subscriber email", async () => {
+    await setupDatabase();
+
+    const response = await unsubscribeGet(
+      new Request(
+        "http://localhost/api/providers/unsubscribe?providerSlug=openrouter&email=digest%40example.com&notificationType=weekly_digest"
+      )
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "unsubscribe token is required" });
   });
 });
 

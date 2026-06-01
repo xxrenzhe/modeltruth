@@ -5,6 +5,14 @@ const algorithm = "aes-256-gcm";
 const redacted = "[REDACTED]";
 const sensitiveKeyPattern = /(api[-_]?key|authorization|auth[-_]?token|access[-_]?token|refresh[-_]?token|session[-_]?token|bot[-_]?token|secret|password|encryptedApiKey)/i;
 
+export type ProviderDigestNotificationType = "risk_trend" | "weekly_digest";
+
+export interface ProviderUnsubscribeTokenPayload {
+  providerSlug: string;
+  email: string;
+  notificationType: ProviderDigestNotificationType;
+}
+
 export function encryptSecret(value: string, key = getAppConfig().encryptionKey): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv(algorithm, deriveKey(key), iv);
@@ -34,6 +42,21 @@ export function redactSecrets<T>(value: T): T {
   return redactValue(value) as T;
 }
 
+export function createProviderUnsubscribeToken(input: ProviderUnsubscribeTokenPayload): string {
+  return encryptSecret(JSON.stringify({ v: 1, ...input }), providerUnsubscribeSecret());
+}
+
+export function parseProviderUnsubscribeToken(token: string): ProviderUnsubscribeTokenPayload {
+  const payload = JSON.parse(decryptSecret(token, providerUnsubscribeSecret())) as Partial<ProviderUnsubscribeTokenPayload> & { v?: unknown };
+  const providerSlug = typeof payload.providerSlug === "string" ? payload.providerSlug : "";
+  const email = typeof payload.email === "string" ? payload.email : "";
+  const notificationType = payload.notificationType;
+  if (payload.v !== 1 || !providerSlug || !email || (notificationType !== "risk_trend" && notificationType !== "weekly_digest")) {
+    throw new Error("unsubscribe token is invalid");
+  }
+  return { providerSlug, email, notificationType };
+}
+
 function deriveKey(key: string) {
   return createHash("sha256").update(key).digest();
 }
@@ -59,4 +82,8 @@ function isSensitiveKey(key: string) {
 
 function looksLikeSecret(value: string) {
   return /sk-[A-Za-z0-9_-]{8,}/.test(value) || /^Bearer\s+\S+/i.test(value);
+}
+
+function providerUnsubscribeSecret() {
+  return process.env.PROVIDER_UNSUBSCRIBE_SECRET ?? getAppConfig().encryptionKey;
 }

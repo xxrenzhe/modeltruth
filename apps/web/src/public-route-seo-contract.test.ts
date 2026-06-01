@@ -48,6 +48,15 @@ describe("public route SEO contract", () => {
       expect(source, `${seoPath} missing nofollow`).toContain("follow: false");
     }
   });
+
+  it("keeps localized route links derived from the active locale instead of hardcoding English", () => {
+    for (const file of findPageFiles(appLocaleRoot)) {
+      const source = readFileSync(file, "utf8");
+      expect(source, `${path.relative(process.cwd(), file)} must not hardcode /en internal anchors`).not.toMatch(
+        /href=(?:"|{["'`])\/en(?:\/|["'`])/
+      );
+    }
+  });
 });
 
 function findPageFiles(root: string) {

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { decryptSecret, encryptSecret, getSecretSuffix, redactSecrets } from "./index";
+import {
+  createProviderUnsubscribeToken,
+  decryptSecret,
+  encryptSecret,
+  getSecretSuffix,
+  parseProviderUnsubscribeToken,
+  redactSecrets
+} from "./index";
 
 describe("crypto helpers", () => {
   it("encrypts and decrypts API keys with AES-GCM format", () => {
@@ -25,6 +32,29 @@ describe("crypto helpers", () => {
       usage: { promptTokens: 10, completionTokens: 3, totalTokens: 13, reasoningTokens: 1 },
       authToken: "[REDACTED]",
       botToken: "[REDACTED]"
+    });
+  });
+
+  it("creates opaque provider unsubscribe tokens without exposing subscriber email", () => {
+    const previousSecret = process.env.PROVIDER_UNSUBSCRIBE_SECRET;
+    process.env.PROVIDER_UNSUBSCRIBE_SECRET = "test-provider-unsubscribe-secret";
+
+    const token = createProviderUnsubscribeToken({
+      providerSlug: "openrouter",
+      email: "subscriber@example.com",
+      notificationType: "weekly_digest"
+    });
+    const parsed = parseProviderUnsubscribeToken(token);
+
+    if (previousSecret === undefined) delete process.env.PROVIDER_UNSUBSCRIBE_SECRET;
+    else process.env.PROVIDER_UNSUBSCRIBE_SECRET = previousSecret;
+
+    expect(token).not.toContain("subscriber@example.com");
+    expect(token).not.toContain("openrouter");
+    expect(parsed).toEqual({
+      providerSlug: "openrouter",
+      email: "subscriber@example.com",
+      notificationType: "weekly_digest"
     });
   });
 });

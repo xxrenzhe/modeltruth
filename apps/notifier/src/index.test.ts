@@ -235,7 +235,9 @@ describe("deliverAlert", () => {
     expect(calls[0].body).toContain("ModelTruth Weekly Provider Digest: OpenRouter");
     expect(calls[0].body).toContain("not legal conclusions");
     expect(calls[0].body).toContain("https://app.modeltruth.example/api/providers/unsubscribe");
-    expect(calls[0].body).toContain("notificationType=weekly_digest");
+    expect(calls[0].body).toContain("token=");
+    expect(calls[0].body).not.toContain("email=weekly");
+    expect(calls[0].body).not.toContain("weekly%40example.com");
     expect(calls[0].body).not.toContain("ops@example.com");
   });
 });
