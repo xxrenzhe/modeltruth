@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-const requiredExcludes = ["docs/", "oldcode/", "secrets/", "claudedocs/", ".git/"];
+const requiredExcludes = ["docs/", "oldcode/", "secrets/", "claudedocs/", ".git/", "node_modules/", ".next/", "coverage/", ".env", ".env.*"];
 const requiredPrograms = ["web", "audit-worker", "scheduler", "notifier"];
 
 export function validateDockerDeployment(root = ".") {
@@ -64,11 +64,13 @@ function validateDockerfile(dockerfilePath: string) {
     "apk add --no-cache supervisor",
     "COPY --from=builder /app/migrations ./migrations",
     "COPY --from=builder /app/pg-migrations ./pg-migrations",
+    "USER modeltruth",
     "EXPOSE 80",
     "HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD node --import tsx scripts/healthcheck.ts",
     'CMD ["sh", "infra/docker-entrypoint.sh"]'
   ];
   const problems = requiredSnippets.filter((snippet) => !source.includes(snippet)).map((snippet) => `Dockerfile.prod missing: ${snippet}`);
+  if (/^USER\s+root\s*$/im.test(source)) problems.push("Dockerfile.prod must not run the production image as root");
   const healthcheckPath = path.join(path.dirname(path.dirname(dockerfilePath)), "scripts", "healthcheck.ts");
   if (!existsSync(healthcheckPath)) {
     problems.push("missing scripts/healthcheck.ts");

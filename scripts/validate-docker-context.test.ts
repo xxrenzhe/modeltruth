@@ -28,8 +28,11 @@ describe("validateDockerDeployment", () => {
     expect(result.problems).toEqual(
       expect.arrayContaining([
         "Dockerfile.prod missing: EXPOSE 80",
+        "Dockerfile.prod missing: USER modeltruth",
         "Dockerfile.prod missing: HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD node --import tsx scripts/healthcheck.ts",
         "healthcheck.ts must probe http://127.0.0.1/api/health",
+        ".dockerignore missing required exclude: node_modules/",
+        ".dockerignore missing required exclude: .env.*",
         "ci.yml missing GHCR release requirement: ghcr.io/xxrenzhe/bes3:prod-latest",
         'ci.yml missing GHCR release requirement: MODELTRUTH_LIVE_SMOKE_REQUIRED: "true"',
         "ci.yml missing GHCR release requirement: npm run postgres:migration-smoke",
@@ -44,7 +47,7 @@ describe("validateDockerDeployment", () => {
 
   it("fails if supervisord tries to bypass entrypoint-owned database initialization", () => {
     const root = mkFixture();
-    writeFileSync(path.join(root, ".dockerignore"), "docs/\noldcode/\nsecrets/\nclaudedocs/\n.git/\n");
+    writeFileSync(path.join(root, ".dockerignore"), dockerignoreFixture());
     writeFileSync(path.join(root, ".gitignore"), "docs/\noldcode/\nsecrets/\nclaudedocs/\n");
     writeFileSync(
       path.join(root, "infra", "Dockerfile.prod"),
@@ -55,6 +58,7 @@ describe("validateDockerDeployment", () => {
         "RUN apk add --no-cache supervisor",
         "COPY --from=builder /app/migrations ./migrations",
         "COPY --from=builder /app/pg-migrations ./pg-migrations",
+        "USER modeltruth",
         "EXPOSE 80",
         "HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD node --import tsx scripts/healthcheck.ts",
         'CMD ["sh", "infra/docker-entrypoint.sh"]'
@@ -87,6 +91,12 @@ describe("validateDockerDeployment", () => {
     );
   });
 });
+
+function dockerignoreFixture() {
+  return ["docs/", "oldcode/", "secrets/", "claudedocs/", ".git/", "node_modules/", ".next/", "coverage/", ".env", ".env.*"].join(
+    "\n"
+  );
+}
 
 function mkFixture() {
   const root = path.join(tmpdir(), `modeltruth-docker-validate-${crypto.randomUUID()}`);
