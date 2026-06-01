@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getDictionary, isLocale, type Locale } from "@modeltruth/i18n";
+import { getDictionary, isLocale, locales, type Locale } from "@modeltruth/i18n";
 import "../globals.css";
 import { GtmVisitBeacon } from "./gtm-visit-beacon";
 
@@ -51,6 +51,13 @@ export default async function LocaleLayout({
               <a href={`/${locale}/workspace`}>{dictionary.nav.workspace}</a>
               <a href={`/${locale}/evidence`}>{dictionary.nav.evidence}</a>
               <a href={`/${locale}/login`}>{dictionary.nav.login}</a>
+            </div>
+            <div aria-label="Language selector" className="localeSwitch">
+              {locales.map((option) => (
+                <a aria-current={option === locale ? "true" : undefined} href={`/${option}`} key={option} hrefLang={option}>
+                  {option}
+                </a>
+              ))}
             </div>
           </nav>
           {children}

@@ -67,6 +67,12 @@ describe("middleware", () => {
     expect(response?.headers.get("location")).toContain("/zh-CN");
   });
 
+  it("persists the selected locale when visiting localized pages", () => {
+    const response = middleware(request("/zh-CN/pricing"));
+    expect(response?.status).not.toBe(307);
+    expect(response?.headers.getSetCookie().join(";")).toContain("locale=zh-CN");
+  });
+
   it("defaults search bots to the English canonical entry", () => {
     const response = middleware(request("/", { acceptLanguage: "zh-CN,zh;q=0.9", userAgent: "Googlebot/2.1" }));
     expect(response?.headers.get("location")).toContain("/en");

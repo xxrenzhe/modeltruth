@@ -57,6 +57,26 @@ a {
   font-size: 0.95rem;
 }
 
+.localeSwitch {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: flex;
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  overflow: hidden;
+  text-transform: uppercase;
+}
+
+.localeSwitch a {
+  padding: 7px 10px;
+  text-decoration: none;
+}
+
+.localeSwitch a[aria-current="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
 .hero {
   display: grid;
   gap: 32px;
