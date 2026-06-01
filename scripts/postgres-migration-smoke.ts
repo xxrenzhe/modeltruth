@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import postgres from "postgres";
 import { ensureDatabaseReady, parsePostgresUrl } from "@modeltruth/db";
+import { runFinalMigrationCheck } from "./final-migration-check";
+import { runValidateDbSchema } from "./validate-db-schema";
 
 type SmokeResult = {
   ok: boolean;
@@ -17,7 +19,7 @@ export async function runPostgresMigrationSmoke(env: Record<string, string | und
     return { ok: !required, skipped: !required, message: required ? "missing DATABASE_URL" : "skipped optional PostgreSQL smoke" };
   }
 
-  const parsed = parsePostgresUrl(withRandomDatabase(databaseUrl));
+  const lockSmoke = parsePostgresUrl(withRandomDatabase(databaseUrl));
   const cwd = path.join(tmpdir(), `modeltruth-pg-smoke-${crypto.randomUUID()}`);
   mkdirSync(path.join(cwd, "pg-migrations"), { recursive: true });
   const migrationPath = path.join(cwd, "pg-migrations", "000_init_schema_consolidated.pg.sql");
@@ -25,17 +27,22 @@ export async function runPostgresMigrationSmoke(env: Record<string, string | und
 
   try {
     const results = await Promise.all([
-      ensureDatabaseReady({ cwd, databaseUrl: parsed.databaseUrl }),
-      ensureDatabaseReady({ cwd, databaseUrl: parsed.databaseUrl })
+      ensureDatabaseReady({ cwd, databaseUrl: lockSmoke.databaseUrl }),
+      ensureDatabaseReady({ cwd, databaseUrl: lockSmoke.databaseUrl })
     ]);
     const executed = results.map((result) => result.executed).sort();
     if (executed.join(",") !== "0,1") throw new Error(`expected one concurrent migration executor, got ${executed.join(",")}`);
 
-    await assertHistoryAndHashDrift(cwd, migrationPath, parsed.databaseUrl);
-    return { ok: true, skipped: false, message: `PostgreSQL migrations applied under advisory lock for ${parsed.dbName}` };
+    await assertHistoryAndHashDrift(cwd, migrationPath, lockSmoke.databaseUrl);
+    const applied = await assertRepositoryPostgresMigrations(databaseUrl);
+    return {
+      ok: true,
+      skipped: false,
+      message: `PostgreSQL advisory lock/hash drift smoke passed; applied ${applied} repository migrations`
+    };
   } finally {
     rmSync(cwd, { recursive: true, force: true });
-    await dropSmokeDatabase(parsed);
+    await dropSmokeDatabase(lockSmoke);
   }
 }
 
@@ -73,6 +80,27 @@ async function expectPostgresHashDrift(cwd: string, databaseUrl: string) {
     throw error;
   }
   throw new Error("expected PostgreSQL migration hash drift to fail closed");
+}
+
+async function assertRepositoryPostgresMigrations(databaseUrl: string) {
+  const parsed = parsePostgresUrl(withRandomDatabase(databaseUrl));
+  try {
+    const result = await ensureDatabaseReady({ cwd: process.cwd(), databaseUrl: parsed.databaseUrl });
+    const schema = await runValidateDbSchema({ databaseUrl: parsed.databaseUrl });
+    if (!schema.ok) throw new Error(`repository PostgreSQL schema validation failed: ${schema.health.reason}`);
+
+    const finalCheck = await runFinalMigrationCheck({
+      cwd: process.cwd(),
+      databaseType: "postgres",
+      databaseUrl: parsed.databaseUrl
+    });
+    if (!finalCheck.ok) {
+      throw new Error(`repository PostgreSQL final migration check failed: ${finalCheck.issues.join("; ")}`);
+    }
+    return result.executed;
+  } finally {
+    await dropSmokeDatabase(parsed);
+  }
 }
 
 async function dropSmokeDatabase(parsed: ReturnType<typeof parsePostgresUrl>) {

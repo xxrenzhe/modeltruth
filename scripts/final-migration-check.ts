@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import postgres from "postgres";
 import { getAppConfig } from "@modeltruth/config";
 import type { DatabaseType } from "@modeltruth/db";
@@ -276,7 +277,11 @@ async function main() {
   console.log(`[final-migration-check] passed: ${result.checked} ${databaseType} migrations match migration_history`);
 }
 
-if (process.env.VITEST !== "true") {
+function isExecutedDirectly() {
+  return process.argv[1] ? import.meta.url === pathToFileURL(process.argv[1]).href : false;
+}
+
+if (isExecutedDirectly()) {
   main().catch((error) => {
     console.error("[final-migration-check] failed", error);
     process.exit(1);

@@ -1,5 +1,6 @@
 import postgres from "postgres";
-import { checkDatabaseHealth } from "@modeltruth/db";
+import { existsSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { getAppConfig } from "@modeltruth/config";
 
 const criticalTables = [
@@ -67,17 +68,46 @@ const criticalIndexes = [
   "idx_evidence_packages_run"
 ];
 
-const health = await checkDatabaseHealth();
-if (!health.ok) {
-  console.error("[validate-db-schema] database health failed", health);
-  process.exit(1);
-}
-await validateSchemaCompleteness();
-
-console.log("[validate-db-schema] database health passed", health);
-
-async function validateSchemaCompleteness() {
+export async function runValidateDbSchema(options: { databaseUrl?: string; databasePath?: string } = {}) {
   const config = getAppConfig();
+  const databaseUrl = options.databaseUrl ?? config.databaseUrl;
+  const databasePath = options.databasePath ?? config.databasePath;
+  const health = databaseUrl ? await checkPostgresHealth(databaseUrl) : await checkSqliteHealth(databasePath);
+  if (!health.ok) return { ok: false, health };
+
+  await validateSchemaCompleteness({ databaseUrl, databasePath });
+  return { ok: true, health };
+}
+
+async function checkPostgresHealth(databaseUrl: string) {
+  const sql = postgres(databaseUrl, { max: 1 });
+  try {
+    await sql`select 1 as ok`;
+    return { ok: true, type: "postgres" as const };
+  } catch (error) {
+    return { ok: false, type: "postgres" as const, reason: String(error) };
+  } finally {
+    await sql.end();
+  }
+}
+
+async function checkSqliteHealth(databasePath: string) {
+  try {
+    if (!existsSync(databasePath)) return { ok: false, type: "sqlite" as const, reason: "missing_sqlite_db" };
+    const { DatabaseSync } = await import("node:sqlite");
+    const db = new DatabaseSync(databasePath);
+    try {
+      db.prepare("select 1 as ok").get();
+    } finally {
+      db.close();
+    }
+    return { ok: true, type: "sqlite" as const };
+  } catch (error) {
+    return { ok: false, type: "sqlite" as const, reason: String(error) };
+  }
+}
+
+async function validateSchemaCompleteness(config: { databaseUrl?: string; databasePath: string }) {
   if (config.databaseUrl) {
     const sql = postgres(config.databaseUrl, { max: 1 });
     try {
@@ -115,8 +145,7 @@ function assertAllTables(existing: string[]) {
   const present = new Set(existing);
   const missing = criticalTables.filter((table) => !present.has(table));
   if (missing.length > 0) {
-    console.error(`[validate-db-schema] missing critical tables: ${missing.join(", ")}`);
-    process.exit(1);
+    throw new Error(`[validate-db-schema] missing critical tables: ${missing.join(", ")}`);
   }
 }
 
@@ -170,8 +199,7 @@ function assertAllColumns(table: string, expected: string[], existing: string[])
   const present = new Set(existing);
   const missing = expected.filter((column) => !present.has(column));
   if (missing.length > 0) {
-    console.error(`[validate-db-schema] missing critical columns on ${table}: ${missing.join(", ")}`);
-    process.exit(1);
+    throw new Error(`[validate-db-schema] missing critical columns on ${table}: ${missing.join(", ")}`);
   }
 }
 
@@ -179,14 +207,32 @@ function assertAllIndexes(existing: string[]) {
   const present = new Set(existing);
   const missing = criticalIndexes.filter((index) => !present.has(index));
   if (missing.length > 0) {
-    console.error(`[validate-db-schema] missing critical indexes: ${missing.join(", ")}`);
-    process.exit(1);
+    throw new Error(`[validate-db-schema] missing critical indexes: ${missing.join(", ")}`);
   }
 }
 
 function assertBusinessConfig(value: string | undefined) {
   if (!value?.includes("fingerprint-calibration@1.0.0")) {
-    console.error("[validate-db-schema] model_registry baseline_suite_version default is missing fingerprint-calibration@1.0.0");
+    throw new Error("[validate-db-schema] model_registry baseline_suite_version default is missing fingerprint-calibration@1.0.0");
+  }
+}
+
+async function main() {
+  const result = await runValidateDbSchema();
+  if (!result.ok) {
+    console.error("[validate-db-schema] database health failed", result.health);
     process.exit(1);
   }
+  console.log("[validate-db-schema] database health passed", result.health);
+}
+
+function isExecutedDirectly() {
+  return process.argv[1] ? import.meta.url === pathToFileURL(process.argv[1]).href : false;
+}
+
+if (isExecutedDirectly()) {
+  main().catch((error) => {
+    console.error("[validate-db-schema] failed", error);
+    process.exit(1);
+  });
 }
