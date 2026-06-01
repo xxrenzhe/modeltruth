@@ -7,6 +7,63 @@ import { applyAuditRetentionPolicy, getEvidencePackage, getPublicAuditSummary, l
 import { createRiskFlagRepository } from "./risk-flags";
 
 describe("audit run evidence persistence", () => {
+  it("persists public risk flags only after independent confirming evidence", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "modeltruth-risk-confirmation-"));
+    const previousPath = process.env.DATABASE_PATH;
+    process.env.DATABASE_PATH = path.join(dir, "modeltruth.sqlite");
+    await ensureSqliteReady({ cwd: process.cwd(), databasePath: process.env.DATABASE_PATH });
+
+    await saveAuditRun({
+      id: "run_single_public_risk",
+      providerSlug: "openrouter",
+      suiteId: "smoke",
+      suiteVersion: "1.0.0",
+      runType: "heartbeat",
+      targetModelId: "router-model",
+      status: "warning",
+      confidence: 0.91,
+      metrics: { statusCode: 200, ttftMs: 1200 },
+      assertions: [{ id: "USAGE_PRESENT", status: "warning", confidence: 0.91 }],
+      evidenceSummary: { requestBodyStored: false }
+    });
+    const afterSingleRepo = await createRiskFlagRepository();
+    const afterSingle = await afterSingleRepo.listByProvider("openrouter", ["active"]);
+    await afterSingleRepo.close();
+    const afterSingleSummary = await getPublicAuditSummary({ providerSlug: "openrouter" });
+
+    await saveAuditRun({
+      id: "run_confirming_public_risk",
+      providerSlug: "openrouter",
+      suiteId: "smoke",
+      suiteVersion: "1.0.0",
+      runType: "heartbeat",
+      targetModelId: "router-model",
+      status: "warning",
+      confidence: 0.72,
+      metrics: { statusCode: 200, ttftMs: 1180 },
+      assertions: [{ id: "USAGE_PRESENT", status: "warning", confidence: 0.72 }],
+      evidenceSummary: { requestBodyStored: false }
+    });
+    const afterConfirmationRepo = await createRiskFlagRepository();
+    const afterConfirmation = await afterConfirmationRepo.listByProvider("openrouter", ["active"]);
+    const evidence = await afterConfirmationRepo.listEvidence(afterConfirmation[0].id);
+    await afterConfirmationRepo.close();
+    const afterConfirmationSummary = await getPublicAuditSummary({ providerSlug: "openrouter" });
+
+    if (previousPath === undefined) delete process.env.DATABASE_PATH;
+    else process.env.DATABASE_PATH = previousPath;
+    rmSync(dir, { recursive: true, force: true });
+
+    expect(afterSingle).toHaveLength(0);
+    expect(afterSingleSummary.riskFlags).toHaveLength(0);
+    expect(afterConfirmation).toHaveLength(1);
+    expect(afterConfirmation[0]).toMatchObject({ assertionId: "USAGE_PRESENT", evidenceCount: 2 });
+    expect(evidence.map((item) => item.runId)).toEqual(["run_single_public_risk", "run_confirming_public_risk"]);
+    expect(afterConfirmationSummary.riskFlags.map((flag) => flag.runId)).toEqual(
+      expect.arrayContaining(["run_single_public_risk", "run_confirming_public_risk"])
+    );
+  });
+
   it("stores redacted evidence packages for export", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "modeltruth-evidence-"));
     const previousPath = process.env.DATABASE_PATH;
