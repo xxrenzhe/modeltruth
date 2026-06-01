@@ -84,6 +84,10 @@ export function PrivacySettingsClient() {
         Default is off. Free Playground runs never save full responses; private workspace runs only
         save them after this explicit opt-in and still skip content that looks like a secret.
       </p>
+      <p className="muted">
+        CLI uploads are opt-in per command. To withdraw local CLI upload state, run{" "}
+        <code>modeltruth privacy-reset</code>; this clears the CLI session token and local audit activation history.
+      </p>
       <button className="button" onClick={() => void exportData()} type="button">
         Export my data
       </button>

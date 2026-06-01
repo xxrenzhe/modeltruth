@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -243,5 +243,34 @@ describe("modeltruth cli", () => {
     expect(JSON.parse(upload.stdout)).toMatchObject({ uploaded: true, runId: "uploaded_run" });
     expect(fetchMock.mock.calls[2]?.[0]).toBe("https://modeltruth.ai/api/cli/upload");
     expect(fetchMock.mock.calls[2]?.[1]?.headers).toMatchObject({ cookie: "mt_session=session-token-123" });
+  });
+
+  it("clears local CLI session and audit history when privacy consent is withdrawn", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "modeltruth-cli-privacy-reset-"));
+    const previousCliHome = process.env.MODELTRUTH_CLI_HOME;
+    process.env.MODELTRUTH_CLI_HOME = dir;
+    writeFileSync(path.join(dir, "config.json"), JSON.stringify({ apiBase: "https://modeltruth.ai", sessionToken: "session-token-123" }));
+    writeFileSync(
+      path.join(dir, "audit-history.json"),
+      JSON.stringify({ schemaVersion: "modeltruth.cli-audit-history.v1", endpoints: { endpoint_hash: { count: 3 } } })
+    );
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await runCli(["privacy-reset"]);
+    const body = JSON.parse(result.stdout);
+
+    if (previousCliHome === undefined) delete process.env.MODELTRUTH_CLI_HOME;
+    else process.env.MODELTRUTH_CLI_HOME = previousCliHome;
+    const configExists = existsSync(path.join(dir, "config.json"));
+    const historyExists = existsSync(path.join(dir, "audit-history.json"));
+    rmSync(dir, { recursive: true, force: true });
+
+    expect(result.exitCode).toBe(0);
+    expect(body).toMatchObject({ reset: true });
+    expect(body.removed).toEqual(expect.arrayContaining(["config.json", "audit-history.json"]));
+    expect(configExists).toBe(false);
+    expect(historyExists).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

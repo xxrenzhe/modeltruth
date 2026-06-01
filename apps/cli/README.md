@@ -38,6 +38,14 @@ modeltruth audit \
 
 Uploads require an authenticated session and explicit consent. Uploaded payloads include only redacted summary fields such as status, confidence, metrics, assertions and evidence summary.
 
+## Withdraw CLI Upload State
+
+```bash
+modeltruth privacy-reset
+```
+
+This clears the local CLI session token and local audit activation history from `~/.modeltruth`. It does not contact ModelTruth servers; future uploads still require a fresh login and explicit `--consent true` or `--consent-upload true`.
+
 ## CTA
 
 This endpoint passed the smoke audit. Keep it monitored 24/7:

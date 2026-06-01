@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -33,6 +33,7 @@ export async function runCliWithOptions(
     if (command === "audit") return await auditCommand(flags, env, options.apiKeyReader);
     if (command === "login") return await loginCommand(flags, env);
     if (command === "upload") return await uploadCommand(flags, env);
+    if (command === "privacy-reset") return privacyResetCommand();
     return { exitCode: 1, stdout: usage(), stderr: command ? `Unknown command: ${command}` : "Missing command" };
   } catch (error) {
     return { exitCode: 1, stdout: "", stderr: error instanceof Error ? error.message : String(error) };
@@ -137,6 +138,23 @@ async function uploadCommand(flags: Record<string, string | boolean>, env: NodeJ
   const report = JSON.parse(readFileSync(reportPath, "utf8"));
   const body = await uploadReport(report, flags, env);
   return { exitCode: 0, stdout: JSON.stringify(body), stderr: "" };
+}
+
+function privacyResetCommand(): CliCommandResult {
+  const removed = [configPath(), auditHistoryPath()].filter((file) => {
+    if (!existsSync(file)) return false;
+    rmSync(file, { force: true });
+    return true;
+  });
+  return {
+    exitCode: 0,
+    stdout: JSON.stringify({
+      reset: true,
+      removed: removed.map((file) => path.basename(file)),
+      message: "CLI local session and audit activation history cleared. Future uploads still require explicit consent."
+    }),
+    stderr: ""
+  };
 }
 
 async function uploadReport(report: Record<string, unknown>, flags: Record<string, string | boolean>, env: NodeJS.ProcessEnv) {
@@ -334,7 +352,8 @@ function usage() {
     "modeltruth audit --base-url https://api.example.com/v1 --model gpt-5.1 --suite smoke@1.0.0",
     "modeltruth audit --base-url https://api.example.com/v1 --model gpt-5.1 --consent-upload true",
     "modeltruth login --email you@example.com --api-base http://localhost:3000",
-    "modeltruth upload --run ./modeltruth-report.json --consent true"
+    "modeltruth upload --run ./modeltruth-report.json --consent true",
+    "modeltruth privacy-reset"
   ].join("\n");
 }
 
