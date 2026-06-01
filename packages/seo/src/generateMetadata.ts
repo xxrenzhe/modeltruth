@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { defaultLocale, locales, type Locale } from "@modeltruth/i18n";
+import { defaultLocale, locales, translatedLocales, type Locale } from "@modeltruth/i18n";
 
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://modeltruth.ai").replace(/\/$/, "");
 const siteName = "ModelTruth.ai";
@@ -35,11 +35,12 @@ export function languageAlternates(path: string, options: { includeNoIndex?: boo
 
 export function getSeoPolicy(locale: Locale, path: string) {
   const normalized = path || "";
+  const untranslatedLocale = !(translatedLocales as readonly Locale[]).includes(locale);
   const generatedEnglishOnly =
     locale !== defaultLocale && (normalized.startsWith("/guides/") || normalized.startsWith("/compare/"));
   return {
-    noIndex: generatedEnglishOnly,
-    canonicalLocale: generatedEnglishOnly ? defaultLocale : locale
+    noIndex: untranslatedLocale || generatedEnglishOnly,
+    canonicalLocale: untranslatedLocale || generatedEnglishOnly ? defaultLocale : locale
   };
 }
 

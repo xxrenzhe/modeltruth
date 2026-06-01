@@ -39,6 +39,6 @@ function classifySurface(pathname: string | null) {
   if (path.includes("/providers/")) return "provider_board";
   if (path.includes("/playground")) return "playground";
   if (path.includes("/pricing")) return "pricing";
-  if (path === "/en" || path === "/zh-CN" || path.endsWith("/methodology")) return "public_dashboard";
+  if (/^\/(en|zh-CN|ja|ko|de|fr)$/.test(path) || path.endsWith("/methodology")) return "public_dashboard";
   return "site";
 }

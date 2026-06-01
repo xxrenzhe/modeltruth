@@ -93,6 +93,28 @@ describe("seo helpers", () => {
     expect(isIndexablePath("zh-CN", "/compare/openrouter-vs-official")).toBe(false);
   });
 
+  it("supports P1 locales as routes but keeps untranslated pages out of the index", () => {
+    for (const locale of ["ja", "ko", "de", "fr"] as const) {
+      const metadata = buildSeoMetadata({
+        locale,
+        path: "/pricing",
+        title: "Pricing",
+        description: "English fallback pricing copy"
+      });
+
+      expect(metadata.robots, locale).toMatchObject({ index: false, follow: false });
+      expect(metadata.alternates?.canonical, locale).toBe("https://modeltruth.ai/en/pricing");
+      expect(metadata.alternates?.languages, locale).not.toHaveProperty(locale);
+      expect(isIndexablePath(locale, "/pricing"), locale).toBe(false);
+    }
+    expect(languageAlternates("/pricing")).toMatchObject({
+      en: "https://modeltruth.ai/en/pricing",
+      "zh-CN": "https://modeltruth.ai/zh-CN/pricing",
+      "x-default": "https://modeltruth.ai/en/pricing"
+    });
+    expect(languageAlternates("/pricing")).not.toHaveProperty("ja");
+  });
+
   it("builds JSON-LD objects without leaking script delimiters", () => {
     const app = softwareApplicationJsonLd("en");
     const faq = faqPageJsonLd([{ question: "Q", answer: "A" }]);

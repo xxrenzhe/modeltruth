@@ -1,9 +1,15 @@
-export const locales = ["en", "zh-CN"] as const;
+export const locales = ["en", "zh-CN", "ja", "ko", "de", "fr"] as const;
 export type Locale = (typeof locales)[number];
-export const defaultLocale: Locale = "en";
+export const defaultLocale = "en";
+export const translatedLocales = ["en", "zh-CN"] as const satisfies readonly Locale[];
+type TranslatedLocale = (typeof translatedLocales)[number];
 
 export function isLocale(value: string | undefined): value is Locale {
   return Boolean(value && (locales as readonly string[]).includes(value));
+}
+
+function isTranslatedLocale(value: Locale): value is TranslatedLocale {
+  return (translatedLocales as readonly string[]).includes(value);
 }
 
 const dictionaries = {
@@ -190,5 +196,6 @@ const dictionaries = {
 } as const;
 
 export function getDictionary(locale: Locale) {
-  return dictionaries[locale] ?? dictionaries[defaultLocale];
+  if (isTranslatedLocale(locale)) return dictionaries[locale];
+  return dictionaries[defaultLocale];
 }

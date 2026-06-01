@@ -5,7 +5,7 @@ import "../globals.css";
 import { GtmVisitBeacon } from "./gtm-visit-beacon";
 
 export function generateStaticParams() {
-  return [{ locale: "en" }, { locale: "zh-CN" }];
+  return locales.map((locale) => ({ locale }));
 }
 
 export async function generateMetadata({

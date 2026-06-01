@@ -67,10 +67,21 @@ describe("middleware", () => {
     expect(response?.headers.get("location")).toContain("/zh-CN");
   });
 
+  it("routes P1 locales while SEO keeps untranslated pages noindexed", () => {
+    const response = middleware(request("/pricing", { acceptLanguage: "ja-JP,ja;q=0.9,en;q=0.5" }));
+    expect(response?.headers.get("location")).toContain("/ja/pricing");
+  });
+
   it("persists the selected locale when visiting localized pages", () => {
     const response = middleware(request("/zh-CN/pricing"));
     expect(response?.status).not.toBe(307);
     expect(response?.headers.getSetCookie().join(";")).toContain("locale=zh-CN");
+  });
+
+  it("persists P1 locale cookies for manually selected language routes", () => {
+    const response = middleware(request("/fr/pricing"));
+    expect(response?.status).not.toBe(307);
+    expect(response?.headers.getSetCookie().join(";")).toContain("locale=fr");
   });
 
   it("defaults search bots to the English canonical entry", () => {
