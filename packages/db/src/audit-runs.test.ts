@@ -195,14 +195,58 @@ describe("audit run evidence persistence", () => {
 
     await seedRun("expired_playground", "playground", new Date(now.getTime() - 25 * 60 * 60 * 1000).toISOString());
     await seedRun("fresh_playground", "playground", new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString());
-    await seedRun("expired_private", "heartbeat", new Date(now.getTime() - 31 * 24 * 60 * 60 * 1000).toISOString(), "ws_1");
-    await seedRun("expired_aggregate", "heartbeat", new Date(now.getTime() - 366 * 24 * 60 * 60 * 1000).toISOString(), "ws_1");
+    const expiredPlaygroundAt = new Date(now.getTime() - 25 * 60 * 60 * 1000).toISOString();
+    const expiredPrivateAt = new Date(now.getTime() - 31 * 24 * 60 * 60 * 1000).toISOString();
+    const expiredAggregateAt = new Date(now.getTime() - 366 * 24 * 60 * 60 * 1000).toISOString();
+    await seedRun("expired_private", "heartbeat", expiredPrivateAt, "ws_1");
+    await seedRun("expired_aggregate", "heartbeat", expiredAggregateAt, "ws_1");
+    const riskRepo = await createRiskFlagRepository();
+    const playgroundFlag = await riskRepo.upsertActive({
+      providerSlug: "openai",
+      assertionId: "PLAYGROUND_RAW",
+      severity: "warning",
+      runId: "expired_playground",
+      targetModelId: "gpt-5.1",
+      suiteId: "smoke",
+      observedAt: expiredPlaygroundAt,
+      redactedSummary: { evidenceSummary: { responseExcerpt: "playground evidence package" } }
+    });
+    const privateFlag = await riskRepo.upsertActive({
+      workspaceId: "ws_1",
+      nodeId: "node_1",
+      providerSlug: "openai",
+      assertionId: "RAW_CHECK_AGGREGATE",
+      severity: "warning",
+      runId: "expired_private",
+      targetModelId: "gpt-5.1",
+      suiteId: "smoke",
+      observedAt: expiredPrivateAt,
+      redactedSummary: { evidenceSummary: { fullResponse: "private evidence package", apiKey: "sk-retention-secret-12345678" } }
+    });
+    const aggregateFlag = await riskRepo.upsertActive({
+      workspaceId: "ws_1",
+      nodeId: "node_1",
+      providerSlug: "openai",
+      assertionId: "RAW_CHECK",
+      severity: "warning",
+      runId: "expired_aggregate",
+      targetModelId: "gpt-5.1",
+      suiteId: "smoke",
+      observedAt: expiredAggregateAt,
+      redactedSummary: { evidenceSummary: { fullResponse: "aggregate evidence package" } }
+    });
+    await riskRepo.close();
 
     const result = await applyAuditRetentionPolicy({ now });
     const expiredPlayground = await getEvidencePackage("expired_playground");
     const freshPlayground = await getEvidencePackage("fresh_playground");
     const expiredPrivate = await getEvidencePackage("expired_private");
     const expiredAggregate = await getEvidencePackage("expired_aggregate");
+    const retainedRiskRepo = await createRiskFlagRepository();
+    const retainedPlaygroundEvidence = await retainedRiskRepo.listEvidence(playgroundFlag.id);
+    const retainedPrivateEvidence = await retainedRiskRepo.listEvidence(privateFlag.id);
+    const retainedAggregateEvidence = await retainedRiskRepo.listEvidence(aggregateFlag.id);
+    await retainedRiskRepo.close();
 
     if (previousPath === undefined) delete process.env.DATABASE_PATH;
     else process.env.DATABASE_PATH = previousPath;
@@ -210,14 +254,22 @@ describe("audit run evidence persistence", () => {
 
     expect(result).toEqual({
       deletedAggregateRuns: 1,
+      deletedAggregateEvidencePackages: 1,
       deletedFreePlaygroundRuns: 1,
-      redactedPrivateEvidenceRuns: 1
+      deletedFreePlaygroundEvidencePackages: 1,
+      redactedPrivateEvidenceRuns: 1,
+      redactedPrivateEvidencePackages: 1
     });
     expect(expiredPlayground).toBeUndefined();
+    expect(retainedPlaygroundEvidence).toHaveLength(0);
     expect(freshPlayground?.assertions).toEqual([{ id: "RAW_CHECK", status: "pass", prompt: "redacted prompt" }]);
     expect(expiredPrivate?.assertions).toEqual([]);
     expect(expiredPrivate?.metrics).toEqual({ ttftMs: 100, statusCode: 200 });
     expect(expiredPrivate?.evidenceSummary).toMatchObject({ retentionRedacted: true });
+    expect(retainedPrivateEvidence[0]?.redactedSummary).toMatchObject({ retentionRedacted: true });
+    expect(JSON.stringify(retainedPrivateEvidence)).not.toContain("private evidence package");
+    expect(JSON.stringify(retainedPrivateEvidence)).not.toContain("sk-retention-secret");
+    expect(retainedAggregateEvidence).toHaveLength(0);
     expect(expiredAggregate).toBeUndefined();
   });
 });
