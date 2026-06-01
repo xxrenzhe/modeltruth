@@ -19,9 +19,43 @@ export async function generateMetadata({
 
 export default function PricingPage() {
   const plans = [
-    { name: "Free", price: "$0", description: "Public dashboard and 3 playground audits per day.", tier: null },
-    { name: "Pro Developer", price: "$19/mo", description: "3 nodes, evidence export and alerts.", tier: "pro" as const },
-    { name: "Team", price: "$79/mo", description: "10 nodes, team members and priority support.", tier: "team" as const }
+    {
+      name: "Free",
+      price: "$0",
+      description: "Public dashboard, CLI local audits and 3 playground audits per day.",
+      tier: null,
+      features: [
+        "Public Dashboard and Provider Truth Boards",
+        "3 stateless Playground audits per day",
+        "CLI local audit with upload disabled by default"
+      ]
+    },
+    {
+      name: "Pro Developer",
+      price: "$19/mo",
+      description: "Private monitoring for individual builders.",
+      tier: "pro" as const,
+      features: [
+        "3 private provider nodes",
+        "5 minute heartbeat monitoring",
+        "12 hour deep audits",
+        "2 encrypted alert channels",
+        "Evidence export and monthly audit reports"
+      ]
+    },
+    {
+      name: "Team",
+      price: "$79/mo",
+      description: "Higher frequency monitoring and collaboration for small teams.",
+      tier: "team" as const,
+      features: [
+        "10 private provider nodes",
+        "1 minute heartbeat monitoring",
+        "6 hour deep audits",
+        "Team member invites",
+        "Priority support and BYO regional probes"
+      ]
+    }
   ];
 
   return (
@@ -47,6 +81,11 @@ export default function PricingPage() {
             <div className="eyebrow">{plan.name}</div>
             <h1>{plan.price}</h1>
             <p className="lede">{plan.description}</p>
+            <ul>
+              {plan.features.map((feature) => (
+                <li key={feature}>{feature}</li>
+              ))}
+            </ul>
             {plan.tier ? <BillingCheckoutButton label={`Subscribe to ${plan.name}`} tier={plan.tier} /> : null}
           </div>
         ))}
@@ -60,6 +99,10 @@ export default function PricingPage() {
         <p className="lede">
           ModelTruth does not take supplier commission, affiliate fees or paid placement for Provider Truth Boards.
           Subscriptions fund private monitoring; provider scoring remains separate from any future sponsored content.
+        </p>
+        <p className="lede">
+          If audit cost exceeds fair-use limits, ModelTruth downshifts schedule frequency instead of selling supplier
+          traffic or changing public rankings.
         </p>
       </section>
     </>
