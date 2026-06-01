@@ -9,7 +9,7 @@ export function isLocale(value: string | undefined): value is Locale {
 const dictionaries = {
   en: {
     meta: {
-      title: "ModelTruth.ai - The Anti-Cheat Engine for AI APIs",
+      title: "ModelTruth.ai - Evidence Engine for AI APIs",
       description: "Evidence-driven AI API monitoring for availability, authenticity and billing consistency."
     },
     nav: {
@@ -23,7 +23,7 @@ const dictionaries = {
     },
     home: {
       eyebrow: "Trust, but verify every token",
-      title: "The Anti-Cheat Engine for AI APIs.",
+      title: "Evidence Engine for AI APIs.",
       lede: "Monitor OpenAI-compatible endpoints for uptime, latency, model consistency, context handling and billing variance without supplier commissions.",
       primaryCta: "Run a smoke audit",
       secondaryCta: "Read methodology",
@@ -92,7 +92,7 @@ const dictionaries = {
   },
   "zh-CN": {
     meta: {
-      title: "ModelTruth.ai - AI API 反作弊审计引擎",
+      title: "ModelTruth.ai - AI API 技术证据引擎",
       description: "面向 AI API 可用性、真实性与计费一致性的证据驱动监控。"
     },
     nav: {
@@ -106,7 +106,7 @@ const dictionaries = {
     },
     home: {
       eyebrow: "Trust, but verify every token",
-      title: "AI API 经济的反作弊引擎。",
+      title: "AI API 经济的技术证据引擎。",
       lede: "持续监控 OpenAI-compatible endpoint 的可用性、延迟、模型一致性、上下文能力和计费偏差，不接受供应商返佣。",
       primaryCta: "运行轻量审计",
       secondaryCta: "查看方法论",

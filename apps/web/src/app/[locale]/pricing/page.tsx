@@ -13,7 +13,7 @@ export async function generateMetadata({
     path: "/pricing",
     title: "AI API monitoring pricing | ModelTruth.ai",
     description:
-      "Subscription pricing for AI API anti-cheat monitoring, private nodes, alerts and evidence exports."
+      "Subscription pricing for AI API technical audit monitoring, private nodes, alerts and evidence exports."
   });
 }
 

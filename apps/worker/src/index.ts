@@ -290,12 +290,12 @@ function writeAuditCompletedLog(input: {
     data: {
       traceId: input.result.traceId,
       runId: input.result.runId,
-      workspaceId: input.payload.workspaceId,
-      nodeId: input.payload.nodeId,
+      workspaceId: input.payload.workspaceId ?? null,
+      nodeId: input.payload.nodeId ?? null,
       suiteId: input.parsedSuite.suiteId,
       suiteVersion: input.parsedSuite.suiteVersion,
-      providerHostHash: typeof input.providerHostHash === "string" ? input.providerHostHash : undefined,
-      latencyBreakdown: input.result.evidenceSummary.latencyTimeline,
+      providerHostHash: typeof input.providerHostHash === "string" ? input.providerHostHash : null,
+      latencyBreakdown: input.result.evidenceSummary.latencyTimeline ?? null,
       redactionApplied: input.result.evidenceSummary.redaction === "applied",
       runType: input.jobType,
       status: input.result.overallStatus

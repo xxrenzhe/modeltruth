@@ -18,6 +18,8 @@ describe("runtime structured logging guard", () => {
       for (const field of [
         "traceId",
         "runId",
+        "workspaceId",
+        "nodeId",
         "suiteId",
         "suiteVersion",
         "providerHostHash",

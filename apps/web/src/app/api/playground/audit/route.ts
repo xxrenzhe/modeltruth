@@ -55,10 +55,12 @@ export async function POST(request: Request) {
       data: {
         traceId: result.traceId,
         runId: result.runId,
+        workspaceId: null,
+        nodeId: null,
         suiteId: parsedSuite.suiteId,
         suiteVersion: parsedSuite.suiteVersion,
-        providerHostHash: result.evidenceSummary.targetHostHash,
-        latencyBreakdown: result.evidenceSummary.latencyTimeline,
+        providerHostHash: result.evidenceSummary.targetHostHash ?? null,
+        latencyBreakdown: result.evidenceSummary.latencyTimeline ?? null,
         redactionApplied: result.evidenceSummary.redaction === "applied",
         runType: "playground",
         status: result.overallStatus

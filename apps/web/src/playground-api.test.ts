@@ -143,6 +143,7 @@ describe("Playground audit API", () => {
   it("persists redacted audit errors for redirect and oversized response safety failures", async () => {
     const harness = await createHarness();
     const originalFetch = globalThis.fetch;
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const cases = [
       {
         fingerprint: "fp-cross-host-redirect",
@@ -178,6 +179,7 @@ describe("Playground audit API", () => {
       const body = await response.json();
       const evidence = await getEvidencePackage(body.runId);
       const serialized = JSON.stringify({ body, evidence });
+      const auditLog = latestAuditLog(logSpy);
 
       expect(response.status).toBe(200);
       expect(body.overallStatus).toBe("error");
@@ -187,6 +189,22 @@ describe("Playground audit API", () => {
       expect(serialized).not.toContain(item.apiKey);
       expect(serialized).not.toContain("metadata.google.internal/latest");
       expect(serialized).not.toContain("sk-");
+      expect(auditLog).toMatchObject({
+        service: "web",
+        event: "audit.completed",
+        traceId: body.traceId,
+        runId: body.runId,
+        workspaceId: null,
+        nodeId: null,
+        suiteId: "smoke",
+        suiteVersion: "1.0.0",
+        providerHostHash: null,
+        latencyBreakdown: null,
+        redactionApplied: true,
+        runType: "playground",
+        status: "error"
+      });
+      expect(JSON.stringify(auditLog)).not.toContain(item.apiKey);
     }
 
     globalThis.fetch = originalFetch;
@@ -207,4 +225,13 @@ async function createHarness() {
       rmSync(dir, { recursive: true, force: true });
     }
   };
+}
+
+function latestAuditLog(logSpy: ReturnType<typeof vi.spyOn>) {
+  const lines = logSpy.mock.calls.map((call) => String(call[0]));
+  const parsed = lines.map((line) => JSON.parse(line) as Record<string, unknown>);
+  for (let index = parsed.length - 1; index >= 0; index -= 1) {
+    if (parsed[index].event === "audit.completed") return parsed[index];
+  }
+  throw new Error("missing audit.completed log");
 }

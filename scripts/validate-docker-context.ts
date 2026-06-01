@@ -101,6 +101,9 @@ function validateSupervisord(path: string) {
     .filter((program) => !source.includes(`[program:${program}]`))
     .map((program) => `supervisord.conf missing program: ${program}`);
   if (!/PORT=80\b/.test(source)) problems.push("supervisord web program must bind PORT=80");
+  if (source.includes("SKIP_RUNTIME_DB_INIT")) {
+    problems.push("supervisord.conf must not set SKIP_RUNTIME_DB_INIT; only docker-entrypoint.sh may set it after db-init");
+  }
   if (!source.includes("apps/worker/src/index.ts")) problems.push("supervisord must start audit worker");
   if (!source.includes("apps/scheduler/src/index.ts")) problems.push("supervisord must start scheduler");
   if (!source.includes("apps/notifier/src/index.ts")) problems.push("supervisord must start notifier");

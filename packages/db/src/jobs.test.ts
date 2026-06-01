@@ -126,14 +126,51 @@ describe("JobRepository", () => {
         types: ["heartbeat"],
         now: new Date(now.getTime() + 370_000)
       });
+      const finalRow = await readJobRow(harness.databasePath, queued.id);
 
       expect(queued.maxAttempts).toBe(3);
       expect(retryAt10s?.attempts).toBe(2);
       expect(retryAt60s?.attempts).toBe(3);
       expect(exhausted).toBeUndefined();
+      expect(finalRow?.status).toBe("failed");
+      expect(finalRow?.attempts).toBe(3);
+      expect(finalRow?.run_after).toBe(new Date(now.getTime() + 300_000).toISOString());
       expect(resolveRetryDelayMs(1)).toBe(10_000);
       expect(resolveRetryDelayMs(2)).toBe(60_000);
       expect(resolveRetryDelayMs(3)).toBe(300_000);
+    } finally {
+      vi.useRealTimers();
+      await repo.close();
+      harness.cleanup();
+    }
+  });
+
+  it("does not retry one-shot jobs after their first failed attempt", async () => {
+    const harness = await createHarness();
+    const repo = await createJobRepository();
+    const now = new Date("2026-05-31T00:00:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    try {
+      const queued = await repo.enqueue({
+        type: "disputeReview",
+        payload: { disputeId: "dispute_1", providerSlug: "openai" },
+        runAfter: now,
+        maxAttempts: 1
+      });
+      const first = await repo.claimNext({ workerId: "worker_1", types: ["disputeReview"], now });
+      await repo.fail(first!.id, "manual review failed");
+      const retry = await repo.claimNext({
+        workerId: "worker_1",
+        types: ["disputeReview"],
+        now: new Date(now.getTime() + 10_000)
+      });
+      const finalRow = await readJobRow(harness.databasePath, queued.id);
+
+      expect(first?.attempts).toBe(1);
+      expect(retry).toBeUndefined();
+      expect(finalRow?.status).toBe("failed");
+      expect(finalRow?.attempts).toBe(1);
     } finally {
       vi.useRealTimers();
       await repo.close();
@@ -167,9 +204,22 @@ async function createHarness() {
   process.env.DATABASE_PATH = path.join(cwd, "data", "modeltruth.sqlite");
   await ensureSqliteReady({ cwd, databasePath: process.env.DATABASE_PATH });
   return {
+    databasePath: process.env.DATABASE_PATH,
     cleanup() {
       process.env.DATABASE_PATH = previousPath;
       rmSync(cwd, { recursive: true, force: true });
     }
   };
+}
+
+async function readJobRow(databasePath: string, id: string) {
+  const { DatabaseSync } = await import("node:sqlite");
+  const db = new DatabaseSync(databasePath);
+  try {
+    return db.prepare("select status, attempts, run_after from jobs where id = ?").get(id) as
+      | { status: string; attempts: number; run_after: string }
+      | undefined;
+  } finally {
+    db.close();
+  }
 }
