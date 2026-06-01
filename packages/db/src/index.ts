@@ -447,6 +447,7 @@ export type {
   AlertChannelRecord,
   AlertChannelRepository,
   AlertChannelSecretRecord,
+  AlertChannelTargetRotationRecord,
   AlertChannelType,
   CreateAlertChannelInput
 } from "./alert-channels";

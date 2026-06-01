@@ -17,6 +17,12 @@ export interface AlertChannelSecretRecord extends AlertChannelRecord {
   encryptedTarget: string;
 }
 
+export interface AlertChannelTargetRotationRecord {
+  id: string;
+  workspaceId: string;
+  encryptedTarget: string;
+}
+
 export interface CreateAlertChannelInput {
   workspaceId: string;
   type: AlertChannelType;
@@ -28,6 +34,8 @@ export interface AlertChannelRepository {
   create(input: CreateAlertChannelInput): Promise<AlertChannelRecord>;
   list(workspaceId: string): Promise<AlertChannelRecord[]>;
   listEnabledSecrets(workspaceId: string): Promise<AlertChannelSecretRecord[]>;
+  listTargetsForRotation(limit?: number): Promise<AlertChannelTargetRotationRecord[]>;
+  updateEncryptedTarget(id: string, encryptedTarget: string): Promise<boolean>;
   close(): Promise<void>;
 }
 
@@ -69,6 +77,26 @@ class SqliteAlertChannelRepository implements AlertChannelRepository {
     return rows.map(mapAlertChannelSecretRow);
   }
 
+  async listTargetsForRotation(limit = 1000): Promise<AlertChannelTargetRotationRecord[]> {
+    const rows = this.db
+      .prepare(
+        `select id, workspace_id, encrypted_target
+         from alert_channels
+         where encrypted_target is not null
+         order by created_at asc
+         limit ?`
+      )
+      .all(limit) as Array<{ id: string; workspace_id: string; encrypted_target: string }>;
+    return rows.map(mapAlertChannelTargetRotationRow);
+  }
+
+  async updateEncryptedTarget(id: string, encryptedTarget: string): Promise<boolean> {
+    const result = this.db
+      .prepare("update alert_channels set encrypted_target = ?, updated_at = ? where id = ?")
+      .run(encryptedTarget, new Date().toISOString(), id) as { changes?: number };
+    return Number(result.changes ?? 0) > 0;
+  }
+
   async close(): Promise<void> {
     this.db.close();
   }
@@ -105,6 +133,27 @@ class PostgresAlertChannelRepository implements AlertChannelRepository {
     return rows.map(mapAlertChannelSecretRow);
   }
 
+  async listTargetsForRotation(limit = 1000): Promise<AlertChannelTargetRotationRecord[]> {
+    const rows = await this.sql<Array<{ id: string; workspace_id: string; encrypted_target: string }>>`
+      select id, workspace_id, encrypted_target
+      from alert_channels
+      where encrypted_target is not null
+      order by created_at asc
+      limit ${limit}
+    `;
+    return rows.map(mapAlertChannelTargetRotationRow);
+  }
+
+  async updateEncryptedTarget(id: string, encryptedTarget: string): Promise<boolean> {
+    const rows = await this.sql<{ id: string }[]>`
+      update alert_channels
+      set encrypted_target = ${encryptedTarget}, updated_at = ${new Date().toISOString()}
+      where id = ${id}
+      returning id
+    `;
+    return rows.length > 0;
+  }
+
   async close(): Promise<void> {
     await this.sql.end();
   }
@@ -136,6 +185,18 @@ function mapAlertChannelRow(row: AlertChannelRow): AlertChannelRecord {
 function mapAlertChannelSecretRow(row: AlertChannelRow): AlertChannelSecretRecord {
   return {
     ...mapAlertChannelRow(row),
+    encryptedTarget: row.encrypted_target
+  };
+}
+
+function mapAlertChannelTargetRotationRow(row: {
+  id: string;
+  workspace_id: string;
+  encrypted_target: string;
+}): AlertChannelTargetRotationRecord {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
     encryptedTarget: row.encrypted_target
   };
 }
