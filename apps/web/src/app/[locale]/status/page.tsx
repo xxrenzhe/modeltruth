@@ -144,7 +144,7 @@ export default async function StatusPage({
                   </div>
                   <div>
                     <dt>Evidence</dt>
-                    <dd>redacted audit summary</dd>
+                    <dd>{compactEvidence(item.evidenceSummary)}</dd>
                   </div>
                 </dl>
               </article>
@@ -160,4 +160,15 @@ function formatFreshness(seconds: number | undefined) {
   if (seconds === undefined) return "n/a";
   if (seconds < 60) return `${seconds}s`;
   return `${Math.ceil(seconds / 60)}m`;
+}
+
+function compactEvidence(value: unknown) {
+  const summary = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  const parts = [
+    typeof summary.suiteVersion === "string" ? `suite ${summary.suiteVersion}` : undefined,
+    typeof summary.completionHash === "string" ? `completion ${summary.completionHash.slice(0, 10)}` : undefined,
+    typeof summary.traceparent === "string" ? `trace ${summary.traceparent.slice(0, 18)}` : undefined,
+    summary.externalProbe === true ? `probe ${String(summary.probeRegion ?? "regional")}` : undefined
+  ].filter(Boolean);
+  return parts.length ? parts.join(" / ") : "redacted summary available";
 }

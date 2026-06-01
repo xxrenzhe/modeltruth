@@ -90,7 +90,12 @@ describe("legal compliance pages", () => {
       "Repeated public risk events",
       "not legal conclusions",
       "getPublicAuditSummary",
-      "application/ld+json"
+      "application/ld+json",
+      "compactEvidence(item.evidenceSummary)",
+      "suite ${summary.suiteVersion}",
+      "completion ${summary.completionHash.slice(0, 10)}",
+      "trace ${summary.traceparent.slice(0, 18)}",
+      "probe ${String(summary.probeRegion ?? \"regional\")}"
     ]) {
       expect(source).toContain(required);
     }
