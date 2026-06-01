@@ -19,6 +19,7 @@ export async function buildPrivacyExport(input: { user: AuthUser; databaseUrl?: 
   const providerSubscriptions = await listProviderSubscriptions(input.user.email);
   const auditRuns = (await Promise.all(workspaceIds.map((workspaceId) => listAuditRuns({ workspaceId, limit: 500 })))).flat().map((run) => ({
     ...run,
+    metrics: redactExportValue(run.metrics),
     assertions: sanitizeAssertions(run.assertions),
     evidenceSummary: sanitizeEvidenceSummary(run.evidenceSummary)
   }));
@@ -146,9 +147,9 @@ function sanitizeEvidenceSummary(value: unknown) {
   if (summary.responseMetadata) {
     const responseMetadata = pick(asRecord(summary.responseMetadata), ["status", "headers", "usage", "finishReason", "errorCode", "errorType"]);
     if (responseMetadata.usage) responseMetadata.usage = normalizePublicUsage(responseMetadata.usage);
-    summary.responseMetadata = responseMetadata;
+    summary.responseMetadata = redactExportValue(responseMetadata);
   }
-  return summary;
+  return redactExportValue(summary);
 }
 
 function pick(record: Record<string, unknown>, keys: string[]) {
@@ -157,4 +158,23 @@ function pick(record: Record<string, unknown>, keys: string[]) {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function redactExportValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactExportValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, nested]) => [
+        key,
+        isSensitiveExportKey(key) ? "[REDACTED]" : redactExportValue(nested)
+      ])
+    );
+  }
+  if (typeof value === "string") return value.replace(/Bearer\s+\S+/gi, "Bearer [REDACTED]").replace(/sk-[A-Za-z0-9_-]{8,}/g, "sk-[REDACTED]");
+  return value;
+}
+
+function isSensitiveExportKey(key: string) {
+  if (key === "tokenUsage") return false;
+  return /(api[-_]?key|authorization|secret|password|encryptedApiKey|accessToken|refreshToken)$/i.test(key);
 }

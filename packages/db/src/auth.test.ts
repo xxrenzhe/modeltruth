@@ -89,7 +89,11 @@ describe("AuthRepository", () => {
       evidenceSummary: {
         fullResponse: "private completion",
         responseBodyStored: true,
-        responseMetadata: { usage: { total_tokens: 12 } }
+        requestMetadata: { authorization: "Bearer sk-export-secret-123456" },
+        responseMetadata: {
+          headers: { authorization: "Bearer sk-export-secret-123456", "x-request-id": "req_export" },
+          usage: { total_tokens: 12 }
+        }
       }
     });
     const exported = await repo.exportUserData(result!.session.user.id);
@@ -105,6 +109,7 @@ describe("AuthRepository", () => {
     expect(exported?.auditRuns[0].evidenceSummary).toMatchObject({ responseMetadata: { usage: { totalTokens: 12 } } });
     expect(JSON.stringify(exported)).not.toContain("total_tokens");
     expect(JSON.stringify(exported)).not.toContain("sk-export-secret");
+    expect(JSON.stringify(exported)).not.toContain("Bearer sk-");
     expect(JSON.stringify(exported)).not.toContain("hooks.example.com/secret");
     expect(JSON.stringify(exported)).not.toContain("private completion");
   });

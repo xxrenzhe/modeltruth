@@ -92,6 +92,7 @@ describe("privacy settings API", () => {
     });
     expect(body.export.auditRuns[0]).toMatchObject({ runId: "privacy_route_run" });
     expect(serialized).not.toContain("sk-route-secret");
+    expect(serialized).not.toContain("Bearer sk-");
     expect(serialized).not.toContain("hooks.example.com/private");
     expect(serialized).not.toContain("private completion body");
   });
@@ -179,6 +180,13 @@ async function createPrivacyExportFixtures(workspaceId: string) {
     confidence: 0.9,
     metrics: { ttftMs: 100 },
     assertions: [],
-    evidenceSummary: { fullResponse: "private completion body", responseBodyStored: true }
+    evidenceSummary: {
+      fullResponse: "private completion body",
+      requestMetadata: { authorization: "Bearer sk-route-secret-123456" },
+      responseBodyStored: true,
+      responseMetadata: {
+        headers: { authorization: "Bearer sk-route-secret-123456", "x-request-id": "req_privacy" }
+      }
+    }
   });
 }
