@@ -26,6 +26,7 @@ export interface ProviderDisputeRepository {
   create(input: CreateProviderDisputeInput): Promise<ProviderDisputeRecord>;
   listByProvider(providerSlug: string): Promise<ProviderDisputeRecord[]>;
   markReviewStarted(id: string): Promise<ProviderDisputeRecord | undefined>;
+  markResolved(id: string): Promise<ProviderDisputeRecord | undefined>;
   markProviderResponseAttached(id: string): Promise<ProviderDisputeRecord | undefined>;
   close(): Promise<void>;
 }
@@ -84,6 +85,10 @@ class SqliteProviderDisputeRepository implements ProviderDisputeRepository {
     return this.updateReviewStatus(id, "under_review");
   }
 
+  async markResolved(id: string): Promise<ProviderDisputeRecord | undefined> {
+    return this.updateReviewStatus(id, "resolved");
+  }
+
   private async updateReviewStatus(id: string, status: ProviderDisputeStatus): Promise<ProviderDisputeRecord | undefined> {
     const now = new Date().toISOString();
     this.db.prepare("update provider_disputes set status = ?, review_started_at = coalesce(review_started_at, ?), updated_at = ? where id = ?").run(status, now, now, id);
@@ -133,6 +138,10 @@ class PostgresProviderDisputeRepository implements ProviderDisputeRepository {
 
   async markReviewStarted(id: string): Promise<ProviderDisputeRecord | undefined> {
     return this.updateReviewStatus(id, "under_review");
+  }
+
+  async markResolved(id: string): Promise<ProviderDisputeRecord | undefined> {
+    return this.updateReviewStatus(id, "resolved");
   }
 
   private async updateReviewStatus(id: string, status: ProviderDisputeStatus): Promise<ProviderDisputeRecord | undefined> {

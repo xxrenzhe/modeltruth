@@ -84,4 +84,26 @@ describe("ProviderDisputeRepository", () => {
 
     expect(updated?.status).toBe("under_review");
   });
+
+  it("marks reviewed disputes as resolved for public status display", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "modeltruth-dispute-resolved-"));
+    const previousPath = process.env.DATABASE_PATH;
+    process.env.DATABASE_PATH = path.join(dir, "modeltruth.sqlite");
+    await ensureSqliteReady({ cwd: process.cwd(), databasePath: process.env.DATABASE_PATH });
+
+    const repo = await createProviderDisputeRepository();
+    const dispute = await repo.create({
+      providerSlug: "openrouter",
+      contactEmail: "provider-resolved@example.com",
+      statement: "Please review and resolve this public technical audit result."
+    });
+    const updated = await repo.markResolved(dispute.id);
+    await repo.close();
+
+    if (previousPath === undefined) delete process.env.DATABASE_PATH;
+    else process.env.DATABASE_PATH = previousPath;
+    rmSync(dir, { recursive: true, force: true });
+
+    expect(updated?.status).toBe("resolved");
+  });
 });

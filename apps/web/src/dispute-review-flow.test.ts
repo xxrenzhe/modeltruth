@@ -84,7 +84,10 @@ describe("dispute review flow", () => {
     expect(source).toContain("listProviderDisputes");
     expect(source).toContain("provider_response_attached");
     expect(source).toContain("Updated after review");
+    expect(source).toContain("Resolved");
     expect(source).toContain("Under review");
+    expect(source).toContain("disputeStatusLabel");
+    expect(source).toContain("reviewStatusClass");
     expect(source).toContain("requestTypeLabel");
     expect(source).toContain("takedown");
     expect(source).toContain("POST /api/disputes");

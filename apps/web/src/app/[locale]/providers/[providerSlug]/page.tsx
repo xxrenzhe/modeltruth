@@ -109,7 +109,7 @@ export default async function ProviderPage({
           </div>
           <div className="statusRow">
             <span>Review status</span>
-            <span className={`pill ${disputes.some((item) => item.status === "provider_response_attached") ? "pass" : "muted"}`}>
+            <span className={`pill ${reviewStatusClass(disputes)}`}>
               {reviewStatusLabel(disputes)}
             </span>
           </div>
@@ -202,8 +202,8 @@ export default async function ProviderPage({
                 <span>
                   {requestTypeLabel(dispute.requestType)}: {dispute.runId ? `Run ${dispute.runId}` : "Provider submission"}
                 </span>
-                <span className={`pill ${dispute.status === "provider_response_attached" ? "pass" : "warning"}`}>
-                  {dispute.status === "provider_response_attached" ? "Updated after review" : "Under review"}
+                <span className={`pill ${disputeStatusClass(dispute.status)}`}>
+                  {disputeStatusLabel(dispute.status)}
                 </span>
               </div>
             ))}
@@ -229,8 +229,25 @@ async function listProviderDisputes(providerSlug: string) {
 
 function reviewStatusLabel(disputes: Awaited<ReturnType<typeof listProviderDisputes>>) {
   if (disputes.some((item) => item.status === "provider_response_attached")) return "Updated after review";
+  if (disputes.some((item) => item.status === "resolved")) return "Resolved";
   if (disputes.some((item) => item.status === "under_review")) return "Under review";
   return "No active dispute";
+}
+
+function reviewStatusClass(disputes: Awaited<ReturnType<typeof listProviderDisputes>>) {
+  if (disputes.some((item) => item.status === "provider_response_attached" || item.status === "resolved")) return "pass";
+  if (disputes.some((item) => item.status === "under_review")) return "warning";
+  return "muted";
+}
+
+function disputeStatusLabel(status: string) {
+  if (status === "provider_response_attached") return "Updated after review";
+  if (status === "resolved") return "Resolved";
+  return "Under review";
+}
+
+function disputeStatusClass(status: string) {
+  return status === "provider_response_attached" || status === "resolved" ? "pass" : "warning";
 }
 
 function requestTypeLabel(value: string | undefined) {
