@@ -58,7 +58,7 @@ function validateDockerfile(dockerfilePath: string) {
   if (!existsSync(dockerfilePath)) return ["missing infra/Dockerfile.prod"];
   const source = readFileSync(dockerfilePath, "utf8");
   const requiredSnippets = [
-    "FROM node:22-alpine AS deps",
+    "FROM node:22.22.0-alpine AS deps",
     "RUN npm ci",
     "RUN npm run build",
     "apk add --no-cache supervisor",

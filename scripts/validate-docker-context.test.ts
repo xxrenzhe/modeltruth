@@ -13,7 +13,7 @@ describe("validateDockerDeployment", () => {
     const root = mkFixture();
     writeFileSync(path.join(root, ".dockerignore"), "docs/\noldcode/\nsecrets/\nclaudedocs/\n.git/\n");
     writeFileSync(path.join(root, ".gitignore"), "docs/\noldcode/\nsecrets/\nclaudedocs/\n");
-    writeFileSync(path.join(root, "infra", "Dockerfile.prod"), "FROM node:22-alpine AS deps\n");
+    writeFileSync(path.join(root, "infra", "Dockerfile.prod"), "FROM node:22.22.0-alpine AS deps\n");
     writeFileSync(path.join(root, "infra", "docker-entrypoint.sh"), "exec supervisord -c infra/supervisord.conf\n");
     writeFileSync(path.join(root, "infra", "supervisord.conf"), "[program:web]\ncommand=node apps/web/server.js\n");
     mkdirSync(path.join(root, ".github", "workflows"), { recursive: true });
@@ -49,7 +49,7 @@ describe("validateDockerDeployment", () => {
     writeFileSync(
       path.join(root, "infra", "Dockerfile.prod"),
       [
-        "FROM node:22-alpine AS deps",
+        "FROM node:22.22.0-alpine AS deps",
         "RUN npm ci",
         "RUN npm run build",
         "RUN apk add --no-cache supervisor",

@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, type MockInstance, vi } from "vitest";
 import { ensureSqliteReady, getEvidencePackage } from "@modeltruth/db";
 import { POST } from "./app/api/playground/audit/route";
 
@@ -249,9 +249,9 @@ async function createHarness() {
   };
 }
 
-function latestAuditLog(logSpy: ReturnType<typeof vi.spyOn>) {
-  const lines = logSpy.mock.calls.map((call) => String(call[0]));
-  const parsed = lines.map((line) => JSON.parse(line) as Record<string, unknown>);
+function latestAuditLog(logSpy: MockInstance<(message?: unknown, ...optionalParams: unknown[]) => void>) {
+  const lines = logSpy.mock.calls.map((call: unknown[]) => String(call[0]));
+  const parsed = lines.map((line: string) => JSON.parse(line) as Record<string, unknown>);
   for (let index = parsed.length - 1; index >= 0; index -= 1) {
     if (parsed[index].event === "audit.completed") return parsed[index];
   }
