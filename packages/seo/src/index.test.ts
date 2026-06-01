@@ -7,6 +7,7 @@ import {
   faqPageJsonLd,
   getSeoPolicy,
   isIndexablePath,
+  isKnownProviderSlug,
   languageAlternates,
   publicPaths,
   softwareApplicationJsonLd
@@ -41,6 +42,8 @@ describe("seo helpers", () => {
     expect(publicPaths).toContain("/guides/verify-openai-compatible-api");
     expect(publicPaths).toContain("/providers/google-gemini");
     expect(publicPaths).toContain("/providers/openrouter");
+    expect(isKnownProviderSlug("openrouter")).toBe(true);
+    expect(isKnownProviderSlug("made-up-provider")).toBe(false);
     expect(languageAlternates("/pricing")["x-default"]).toBe("https://modeltruth.ai/en/pricing");
   });
 

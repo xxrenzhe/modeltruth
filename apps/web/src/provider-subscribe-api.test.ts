@@ -52,6 +52,18 @@ describe("provider subscribe API", () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "notificationType must be risk_trend or weekly_digest" });
   });
+
+  it("rejects unsupported provider slugs before creating digest subscriptions", async () => {
+    await setupDatabase();
+    const response = await POST(jsonRequest({ providerSlug: "made-up-provider", email: "dev@example.com" }));
+    const repo = await createProviderSubscriptionRepository();
+    const subscriptions = await repo.listByEmail("dev@example.com");
+    await repo.close();
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "providerSlug is not supported" });
+    expect(subscriptions).toHaveLength(0);
+  });
 });
 
 async function setupDatabase() {

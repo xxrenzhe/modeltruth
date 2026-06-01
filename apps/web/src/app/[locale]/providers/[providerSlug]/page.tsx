@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import { getDictionary, type Locale } from "@modeltruth/i18n";
 import { createProviderDisputeRepository, getPublicAuditSummary } from "@modeltruth/db";
 import {
@@ -7,6 +8,7 @@ import {
   datasetJsonLd,
   jsonLdScript,
   localizedPath,
+  isKnownProviderSlug,
   providers
 } from "@modeltruth/seo";
 
@@ -20,9 +22,9 @@ export async function generateMetadata({
   params: Promise<{ locale: Locale; providerSlug: string }>;
 }) {
   const { locale, providerSlug } = await params;
+  if (!isKnownProviderSlug(providerSlug)) notFound();
   const dictionary = getDictionary(locale);
-  const provider =
-    dictionary.providers.find((item) => item.slug === providerSlug) ?? dictionary.providers[0];
+  const provider = dictionary.providers.find((item) => item.slug === providerSlug)!;
   const title = `${provider.name} AI API Truth Board | ModelTruth.ai`;
 
   return buildSeoMetadata({
@@ -39,9 +41,9 @@ export default async function ProviderPage({
   params: Promise<{ locale: Locale; providerSlug: string }>;
 }) {
   const { locale, providerSlug } = await params;
+  if (!isKnownProviderSlug(providerSlug)) notFound();
   const dictionary = getDictionary(locale);
-  const provider =
-    dictionary.providers.find((item) => item.slug === providerSlug) ?? dictionary.providers[0];
+  const provider = dictionary.providers.find((item) => item.slug === providerSlug)!;
   const summary = await getPublicAuditSummary({ providerSlug: provider.slug });
   const disputes = await listProviderDisputes(provider.slug);
   const providerUrl = absoluteUrl(localizedPath(locale, `/providers/${provider.slug}`));

@@ -1,5 +1,10 @@
 export const providers = ["openai", "anthropic", "google-gemini", "openrouter"] as const;
+export type ProviderSlug = (typeof providers)[number];
 export const comparePairs = ["openai-vs-anthropic", "openai-vs-openrouter", "openrouter-vs-official"] as const;
+
+export function isKnownProviderSlug(value: string): value is ProviderSlug {
+  return (providers as readonly string[]).includes(value);
+}
 
 export const guides = [
   {

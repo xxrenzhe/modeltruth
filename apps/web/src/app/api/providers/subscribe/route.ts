@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createProviderSubscriptionRepository } from "@modeltruth/db";
+import { isKnownProviderSlug } from "@modeltruth/seo";
 import { safeErrorMessage } from "@modeltruth/shared";
 
 export async function POST(request: Request) {
@@ -32,6 +33,7 @@ async function parseBody(request: Request) {
 function parseProviderSlug(value: unknown) {
   const slug = typeof value === "string" ? value.trim().toLowerCase() : "";
   if (!/^[a-z0-9-]{2,64}$/.test(slug)) throw new Error("providerSlug is required");
+  if (!isKnownProviderSlug(slug)) throw new Error("providerSlug is not supported");
   return slug;
 }
 
