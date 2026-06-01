@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { locales } from "@modeltruth/i18n";
 import {
@@ -67,7 +68,7 @@ describe("seo helpers", () => {
           url: metadata.alternates?.canonical
         });
         expect(metadata.openGraph?.images, `${locale}:${path} OG image`).toEqual(
-          expect.arrayContaining([expect.objectContaining({ url: "https://modeltruth.ai/og/modeltruth-default.png" })])
+          expect.arrayContaining([expect.objectContaining({ url: "https://modeltruth.ai/og/modeltruth-default.svg" })])
         );
         expect(metadata.twitter, `${locale}:${path} twitter`).toMatchObject({ card: "summary_large_image" });
         expect(metadata.robots, `${locale}:${path} robots`).toMatchObject(
@@ -123,5 +124,19 @@ describe("seo helpers", () => {
     expect(app).toMatchObject({ "@type": "SoftwareApplication", name: "ModelTruth.ai" });
     expect(faq).toMatchObject({ "@type": "FAQPage" });
     expect(breadcrumbs).toMatchObject({ "@type": "BreadcrumbList" });
+  });
+
+  it("points default OG metadata at a committed static asset", () => {
+    const metadata = buildSeoMetadata({
+      locale: "en",
+      path: "",
+      title: "ModelTruth.ai",
+      description: "Evidence-driven AI API audit monitoring."
+    });
+    const images = metadata.openGraph?.images;
+    const image = Array.isArray(images) ? images[0] : images;
+
+    expect(image).toMatchObject({ url: "https://modeltruth.ai/og/modeltruth-default.svg", width: 1200, height: 630 });
+    expect(existsSync("apps/web/public/og/modeltruth-default.svg")).toBe(true);
   });
 });

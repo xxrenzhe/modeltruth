@@ -3,7 +3,7 @@ import { defaultLocale, locales, translatedLocales, type Locale } from "@modeltr
 
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://modeltruth.ai").replace(/\/$/, "");
 const siteName = "ModelTruth.ai";
-const defaultOgImage = "/og/modeltruth-default.png";
+const defaultOgImage = "/og/modeltruth-default.svg";
 
 export type SeoInput = {
   locale: Locale;
