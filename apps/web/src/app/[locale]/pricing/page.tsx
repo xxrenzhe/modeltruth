@@ -54,6 +54,14 @@ export default function PricingPage() {
       <section className="actions">
         <BillingPortalButton label="Manage subscription" />
       </section>
+      <section className="card">
+        <div className="eyebrow">Commercial independence</div>
+        <h2>No paid ranking</h2>
+        <p className="lede">
+          ModelTruth does not take supplier commission, affiliate fees or paid placement for Provider Truth Boards.
+          Subscriptions fund private monitoring; provider scoring remains separate from any future sponsored content.
+        </p>
+      </section>
     </>
   );
 }

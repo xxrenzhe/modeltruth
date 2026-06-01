@@ -83,6 +83,8 @@ export default async function ComparePage({
       <p className="lede">
         Compare {leftName} with {rightName} using ModelTruth audit signals: uptime,
         TTFT, error rate, model consistency, context behavior and billing variance.
+        Comparisons do not include supplier commission, affiliate fees or paid ranking.
+        Any future sponsored content must be clearly labeled and isolated from scoring.
       </p>
       <div className="metricGrid">
         <div className="metric">Uptime trend</div>

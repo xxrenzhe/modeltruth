@@ -139,6 +139,15 @@ export default async function ProviderPage({
         </div>
       </section>
       <section className="card">
+        <div className="eyebrow">Independent methodology</div>
+        <h2>No supplier commission or paid ranking</h2>
+        <p className="lede">
+          ModelTruth is funded by subscriptions, not supplier commissions, affiliate fees or paid placement.
+          Provider pages are ordered and interpreted from public technical signals, user filters and redacted
+          evidence only. Any future sponsored content must be clearly labeled and kept separate from scoring.
+        </p>
+      </section>
+      <section className="card">
         <div className="eyebrow">Provider risk alerts</div>
         <h2>Subscribe to Truth/Risk changes</h2>
         <p className="lede">
