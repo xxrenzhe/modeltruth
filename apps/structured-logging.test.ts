@@ -28,11 +28,47 @@ describe("runtime structured logging guard", () => {
       ]) {
         expect(source, `${file}:${field}`).toContain(field);
       }
-      const logCalls = source.match(/writeJsonLog\([\s\S]*?\);/g) ?? [];
+      const logCalls = writeJsonLogCalls(source);
       expect(logCalls.length, file).toBeGreaterThan(0);
       for (const logCall of logCalls) {
         expect(logCall, file).not.toMatch(/\b(apiKey|encryptedApiKey|authorization|bearer)\b/i);
+        expect(logCall, file).not.toMatch(/\b(originalPayload|payloadJson)\b/);
+        expect(logCall, file).not.toMatch(/\bdata\s*:\s*payload\b/);
+        expect(logCall, file).not.toMatch(/\.\.\.payload\b/);
+        expect(logCall, file).not.toMatch(/\.\.\.input\.payload\b/);
       }
     }
   });
 });
+
+function writeJsonLogCalls(source: string) {
+  const calls: string[] = [];
+  let index = 0;
+  while ((index = source.indexOf("writeJsonLog(", index)) >= 0) {
+    const end = findCallEnd(source, index + "writeJsonLog(".length);
+    calls.push(source.slice(index, end));
+    index = end;
+  }
+  return calls;
+}
+
+function findCallEnd(source: string, start: number) {
+  let depth = 1;
+  let quote: string | undefined;
+  for (let index = start; index < source.length; index += 1) {
+    const char = source[index];
+    const previous = source[index - 1];
+    if (quote) {
+      if (char === quote && previous !== "\\") quote = undefined;
+      continue;
+    }
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+      continue;
+    }
+    if (char === "(") depth += 1;
+    if (char === ")") depth -= 1;
+    if (depth === 0) return index + 1;
+  }
+  return source.length;
+}
