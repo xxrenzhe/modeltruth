@@ -38,10 +38,23 @@ describe("API auth guard static rules", () => {
     const violations = routeFiles()
       .map((file) => ({ file, source: readFileSync(file, "utf-8") }))
       .filter(({ file }) => protectedRouteFragments.some((fragment) => normalizePath(file).includes(fragment)))
-      .filter(({ source }) => /\bx-user-id\b/i.test(source) || /\bx-workspace-id\b/i.test(source))
+      .filter(({ source }) => trustsSpoofableIdentityHeader(source))
       .map(({ file }) => path.relative(process.cwd(), file));
 
     expect(violations).toEqual([]);
+  });
+
+  it("detects spoofable identity headers across case, separators and string concatenation", () => {
+    for (const source of [
+      'request.headers.get("X-User-Id")',
+      'headers().get("x_workspace_id")',
+      'request.headers.get("x" + "-user-id")',
+      "request.headers.get('x' + '-workspace' + '-id')"
+    ]) {
+      expect(trustsSpoofableIdentityHeader(source), source).toBe(true);
+    }
+
+    expect(trustsSpoofableIdentityHeader('request.headers.get("x-request-id")')).toBe(false);
   });
 
   it("requires every non-public API route to declare an authentication mechanism", () => {
@@ -69,4 +82,14 @@ function normalizePath(file: string) {
 
 function apiRouteName(file: string) {
   return normalizePath(path.relative(apiRoot, file));
+}
+
+function trustsSpoofableIdentityHeader(source: string) {
+  const normalized = source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "")
+    .replace(/["'`]\s*\+\s*["'`]/g, "")
+    .toLowerCase()
+    .replace(/[_\s]+/g, "-");
+  return /\bx-user-id\b/.test(normalized) || /\bx-workspace-id\b/.test(normalized);
 }
