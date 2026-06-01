@@ -14,12 +14,11 @@ const intervalMs = Number(process.env.SCHEDULER_INTERVAL_MS ?? 60_000);
 const calibrationIntervalMs = Number(process.env.MODELTRUTH_CALIBRATION_INTERVAL_MS ?? 7 * 24 * 60 * 60 * 1000);
 const scheduledDeepAuditSuites = ["smoke@1.0.0", "reasoning-lite@1.0.0", "context-lite@1.0.0"] as const;
 
-export async function runSchedulerTick() {
+export async function runSchedulerTick(now = new Date()) {
   await runRetentionMaintenance();
   const jobs = await createJobRepository();
   const nodes = await createProviderNodeRepository();
   try {
-    const now = new Date();
     const dueNodes = await nodes.listDueForSchedule(now);
     for (const node of dueNodes) {
       if (!node.nextHeartbeatAt || new Date(node.nextHeartbeatAt) <= now) {
@@ -27,6 +26,7 @@ export async function runSchedulerTick() {
         if (!(await jobs.hasActiveFingerprint("heartbeat", fingerprint))) {
           const job = await jobs.enqueue({
             type: "heartbeat",
+            runAfter: now,
             payload: { source: "scheduler", nodeId: node.id, scheduledAt: now.toISOString(), fingerprint }
           });
           await nodes.markScheduled(node.id, "heartbeat", new Date(now.getTime() + node.heartbeatIntervalSeconds * 1000));
@@ -64,6 +64,7 @@ export async function runSchedulerTick() {
         if (!(await jobs.hasActiveFingerprint("deepAudit", fingerprint))) {
           const job = await jobs.enqueue({
             type: "deepAudit",
+            runAfter: now,
             payload: { source: "scheduler", nodeId: node.id, suiteId, scheduledAt: now.toISOString(), fingerprint }
           });
           await nodes.markScheduled(node.id, "deepAudit", new Date(now.getTime() + node.deepAuditIntervalSeconds * 1000));

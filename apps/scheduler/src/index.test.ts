@@ -15,6 +15,62 @@ import { saveAuditRun } from "@modeltruth/db";
 import { runSchedulerTick } from "./index";
 
 describe("runSchedulerTick calibration scheduling", () => {
+  it("advances heartbeat and deep-audit schedules using the node interval policy", async () => {
+    const harness = await createHarness("modeltruth-scheduler-node-intervals-");
+    const now = new Date("2026-06-01T00:00:00.000Z");
+    const auth = await createAuthRepository();
+    const link = await auth.createMagicLink("scheduler-intervals@example.com");
+    const session = await auth.consumeMagicLink(link.token);
+    await auth.close();
+    const billing = await createBillingRepository();
+    try {
+      await billing.updateWorkspaceBilling({ workspaceId: session!.session.workspace.id, subscriptionStatus: "active", tier: "team" });
+    } finally {
+      await billing.close();
+    }
+    const nodes = await createProviderNodeRepository();
+    let nodeId = "";
+    try {
+      const node = await nodes.create({
+        workspaceId: session!.session.workspace.id,
+        name: "Team interval node",
+        baseUrl: "https://api.example.com/v1",
+        baseUrlHostHash: "host_hash",
+        modelId: "gpt-5.1",
+        encryptedApiKey: "encrypted",
+        apiKeySuffix: "test",
+        heartbeatIntervalSeconds: 60,
+        deepAuditIntervalSeconds: 21600
+      });
+      nodeId = node.id;
+    } finally {
+      await nodes.close();
+    }
+
+    await runSchedulerTick(now);
+
+    const refreshedNodes = await createProviderNodeRepository();
+    const jobs = await createJobRepository();
+    try {
+      const node = (await refreshedNodes.list(session!.session.workspace.id)).find((item) => item.id === nodeId);
+      const heartbeat = await jobs.claimNext({ workerId: "test-scheduler", types: ["heartbeat"], now });
+      const deepAudit = await jobs.claimNext({ workerId: "test-scheduler", types: ["deepAudit"], now });
+      const heartbeatPayload = JSON.parse(heartbeat?.payloadJson ?? "{}");
+      const deepAuditPayload = JSON.parse(deepAudit?.payloadJson ?? "{}");
+
+      expect(heartbeat?.type).toBe("heartbeat");
+      expect(deepAudit?.type).toBe("deepAudit");
+      expect(heartbeatPayload.scheduledAt).toBe(now.toISOString());
+      expect(deepAuditPayload.scheduledAt).toBe(now.toISOString());
+      expect(node?.nextHeartbeatAt).toBe(new Date(now.getTime() + 60_000).toISOString());
+      expect(node?.nextDeepAuditAt).toBe(new Date(now.getTime() + 21_600_000).toISOString());
+    } finally {
+      await jobs.close();
+      await refreshedNodes.close();
+      harness.cleanup();
+    }
+  });
+
   it("enqueues weekly calibration jobs for due models without duplicating active work", async () => {
     const harness = await createHarness("modeltruth-scheduler-calibration-");
     const registry = await createModelRegistryRepository();
