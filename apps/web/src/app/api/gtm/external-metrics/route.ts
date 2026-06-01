@@ -29,7 +29,7 @@ function bearerToken(request: Request) {
 }
 
 function parseSource(value: unknown): GtmExternalMetricSource {
-  if (value === "github_stars" || value === "package_downloads") return value;
+  if (value === "github_stars" || value === "package_downloads" || value === "cli_installs") return value;
   throw new Error("invalid external metric source");
 }
 

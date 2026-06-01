@@ -23,7 +23,7 @@ const ddlPattern = /\b(create\s+table|alter\s+table|drop\s+table|drop\s+column|t
 const ddlAllowedPathPatterns = [
   /^packages\/db\/src\/index\.ts$/,
   /\.test\.ts$/,
-  /^scripts\/(db-init|migrate|validate-db-schema|final-migration-check)\.ts$/,
+  /^scripts\/(db-init|migrate|validate-db-schema|final-migration-check|postgres-migration-smoke)\.ts$/,
   /^scripts\/validate-engineering-discipline\.ts$/
 ];
 

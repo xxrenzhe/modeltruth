@@ -3,7 +3,7 @@ import postgres from "postgres";
 import { getAppConfig } from "@modeltruth/config";
 
 export type GtmTrafficSurface = "site" | "public_dashboard" | "provider_board" | "playground" | "pricing";
-export type GtmExternalMetricSource = "github_stars" | "package_downloads";
+export type GtmExternalMetricSource = "github_stars" | "package_downloads" | "cli_installs";
 
 export interface RecordGtmVisitInput {
   surface: GtmTrafficSurface;
@@ -146,5 +146,5 @@ function isTrafficSurface(value: string): value is GtmTrafficSurface {
 }
 
 function isExternalMetricSource(value: string): value is GtmExternalMetricSource {
-  return ["github_stars", "package_downloads"].includes(value);
+  return ["github_stars", "package_downloads", "cli_installs"].includes(value);
 }

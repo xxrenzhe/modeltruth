@@ -157,9 +157,9 @@ function publicRiskFlags(runs: AuditRunListItem[], riskFlagStatuses: Map<string,
     const persisted = riskFlagStatuses.get(run.runId);
     if (persisted?.status === "resolved") return false;
     const group = groups.get(riskGroupKey(run)) ?? [];
-    const riskCount = riskRuns(group).length;
-    const hasRetest = group.length >= 2;
-    return riskCount >= 2 || ((run.confidence ?? 0) >= 0.85 && hasRetest);
+    const confirmingRiskRuns = riskRuns(group);
+    const hasConfirmingRiskRetest = confirmingRiskRuns.some((candidate) => candidate.runId !== run.runId);
+    return confirmingRiskRuns.length >= 2 || ((run.confidence ?? 0) >= 0.85 && hasConfirmingRiskRetest);
   });
 }
 

@@ -51,8 +51,10 @@ describe("buildGtmMetricsSnapshot", () => {
       monthlyVisits: 3,
       dashboardWeeklyActiveVisitors: 2,
       githubStars: 333,
-      packageDownloads: 444
+      packageDownloads: 444,
+      cliInstalls: 222
     });
+    expect(snapshot.beta30Targets).toMatchObject({ cliInstallsTarget: 500, cliInstallsProgress: 222 / 500 });
     expect(snapshot.launch90Targets).toMatchObject({
       monthlyVisitsTarget: 10000,
       paidSubscriptionsTarget: 100,
@@ -150,6 +152,7 @@ async function recordLaunchMetrics() {
     });
     await repo.upsertExternalMetric({ source: "github_stars", metricValue: 333 });
     await repo.upsertExternalMetric({ source: "package_downloads", metricValue: 444 });
+    await repo.upsertExternalMetric({ source: "cli_installs", metricValue: 222 });
   } finally {
     await repo.close();
   }

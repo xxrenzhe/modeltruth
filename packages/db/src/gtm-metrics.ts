@@ -25,13 +25,16 @@ export interface GtmMetricsSnapshot {
     dashboardWeeklyActiveVisitors: number;
     githubStars: number;
     packageDownloads: number;
+    cliInstalls: number;
   };
   beta30Targets: {
     auditRunsTarget: 1000;
     proSubscriptionsTarget: 20;
+    cliInstallsTarget: 500;
     mrrUsdTarget: 380;
     auditRunsProgress: number;
     proSubscriptionsProgress: number;
+    cliInstallsProgress: number;
     mrrProgress: number;
   };
   launch90Targets: {
@@ -91,6 +94,7 @@ interface GtmCounts {
   dashboardWeeklyActiveVisitors: number;
   githubStars: number;
   packageDownloads: number;
+  cliInstalls: number;
 }
 
 function sqliteCounts(db: { prepare(sql: string): any }, since: string, now: Date): GtmCounts {
@@ -137,14 +141,15 @@ function sqliteCounts(db: { prepare(sql: string): any }, since: string, now: Dat
       [since7]
     ),
     githubStars: sqliteCount(db, "select coalesce(max(metric_value), 0) as count from gtm_external_metric_snapshots where source = 'github_stars'", []),
-    packageDownloads: sqliteCount(db, "select coalesce(max(metric_value), 0) as count from gtm_external_metric_snapshots where source = 'package_downloads'", [])
+    packageDownloads: sqliteCount(db, "select coalesce(max(metric_value), 0) as count from gtm_external_metric_snapshots where source = 'package_downloads'", []),
+    cliInstalls: sqliteCount(db, "select coalesce(max(metric_value), 0) as count from gtm_external_metric_snapshots where source = 'cli_installs'", [])
   };
 }
 
 async function postgresCounts(sql: postgres.Sql, since: string, now: Date): Promise<GtmCounts> {
   const since30 = daysAgo(now, 30).slice(0, 10);
   const since7 = daysAgo(now, 7).slice(0, 10);
-  const [auditRuns, playgroundAuditRuns, cliAuditRuns, playgroundWarningOrFailRuns, firstPaidNodeActivations, providerSubscriptions, waitlistSignups, proSubscriptions, teamSubscriptions, monthlyVisits, dashboardWeeklyActiveVisitors, githubStars, packageDownloads] =
+  const [auditRuns, playgroundAuditRuns, cliAuditRuns, playgroundWarningOrFailRuns, firstPaidNodeActivations, providerSubscriptions, waitlistSignups, proSubscriptions, teamSubscriptions, monthlyVisits, dashboardWeeklyActiveVisitors, githubStars, packageDownloads, cliInstalls] =
     await Promise.all([
       pgCount(sql, sql`select count(*)::int as count from audit_runs where created_at >= ${since}`),
       pgCount(sql, sql`select count(*)::int as count from audit_runs where created_at >= ${since} and run_type = 'playground'`),
@@ -177,7 +182,8 @@ async function postgresCounts(sql: postgres.Sql, since: string, now: Date): Prom
         sql`select count(distinct visitor_hash)::int as count from gtm_daily_visitors where day >= ${since7} and surface in ('public_dashboard','provider_board')`
       ),
       pgCount(sql, sql`select coalesce(max(metric_value), 0)::int as count from gtm_external_metric_snapshots where source = 'github_stars'`),
-      pgCount(sql, sql`select coalesce(max(metric_value), 0)::int as count from gtm_external_metric_snapshots where source = 'package_downloads'`)
+      pgCount(sql, sql`select coalesce(max(metric_value), 0)::int as count from gtm_external_metric_snapshots where source = 'package_downloads'`),
+      pgCount(sql, sql`select coalesce(max(metric_value), 0)::int as count from gtm_external_metric_snapshots where source = 'cli_installs'`)
     ]);
   return {
     auditRuns,
@@ -192,7 +198,8 @@ async function postgresCounts(sql: postgres.Sql, since: string, now: Date): Prom
     monthlyVisits,
     dashboardWeeklyActiveVisitors,
     githubStars,
-    packageDownloads
+    packageDownloads,
+    cliInstalls
   };
 }
 
@@ -232,14 +239,17 @@ function snapshotFromCounts(now: Date, windowDays: number, counts: GtmCounts): G
       monthlyVisits: counts.monthlyVisits,
       dashboardWeeklyActiveVisitors: counts.dashboardWeeklyActiveVisitors,
       githubStars: counts.githubStars,
-      packageDownloads: counts.packageDownloads
+      packageDownloads: counts.packageDownloads,
+      cliInstalls: counts.cliInstalls
     },
     beta30Targets: {
       auditRunsTarget: 1000,
       proSubscriptionsTarget: 20,
+      cliInstallsTarget: 500,
       mrrUsdTarget: 380,
       auditRunsProgress: ratio(counts.auditRuns, 1000),
       proSubscriptionsProgress: ratio(counts.proSubscriptions, 20),
+      cliInstallsProgress: ratio(counts.cliInstalls, 500),
       mrrProgress: ratio(mrrUsd, 380)
     },
     launch90Targets: {

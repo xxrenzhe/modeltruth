@@ -369,28 +369,73 @@ async function persistRiskFlagEvidence(input: SaveAuditRunInput, createdAt: stri
   const repo = await createRiskFlagRepository();
   try {
     for (const assertion of riskyAssertions) {
-      await repo.upsertActive({
-        workspaceId: input.workspaceId,
-        nodeId: input.nodeId,
-        providerSlug: input.providerSlug,
-        assertionId: assertion.id,
-        severity: assertion.severity,
-        runId: input.id,
-        targetModelId: input.targetModelId,
-        suiteId: input.suiteId,
-        redactedSummary: redactSecrets({
-          status: input.status,
-          confidence: input.confidence,
-          metrics: input.metrics,
-          assertion: assertion.publicSummary,
-          evidenceSummary: input.evidenceSummary
-        }),
-        observedAt: createdAt
-      });
+      const current = riskFlagInput(input, assertion, createdAt);
+      const previous = await findPreviousConfirmingRiskRun(input, assertion.id);
+      const linkedRunIds = new Set((await repo.listEvidenceStatuses(input.providerSlug)).map((status) => status.runId));
+      if (!previous && !linkedRunIds.has(input.id)) continue;
+      if (previous && !linkedRunIds.has(previous.input.id)) {
+        await repo.upsertActive(riskFlagInput(previous.input, previous.assertion, previous.createdAt));
+      }
+      if (!linkedRunIds.has(input.id)) await repo.upsertActive(current);
     }
   } finally {
     await repo.close();
   }
+}
+
+function riskFlagInput(
+  input: Pick<SaveAuditRunInput, "workspaceId" | "nodeId" | "providerSlug" | "id" | "targetModelId" | "suiteId" | "status" | "confidence" | "metrics" | "evidenceSummary">,
+  assertion: ReturnType<typeof riskAssertions>[number],
+  createdAt: string
+) {
+  return {
+    workspaceId: input.workspaceId,
+    nodeId: input.nodeId,
+    providerSlug: input.providerSlug,
+    assertionId: assertion.id,
+    severity: assertion.severity,
+    runId: input.id,
+    targetModelId: input.targetModelId,
+    suiteId: input.suiteId,
+    redactedSummary: redactSecrets({
+      status: input.status,
+      confidence: input.confidence,
+      metrics: input.metrics,
+      assertion: assertion.publicSummary,
+      evidenceSummary: input.evidenceSummary
+    }),
+    observedAt: createdAt
+  };
+}
+
+async function findPreviousConfirmingRiskRun(input: SaveAuditRunInput, assertionId: string) {
+  const runs = await listAuditRuns({ limit: 5000 });
+  for (const run of runs) {
+    if (run.runId === input.id) continue;
+    if (run.providerSlug !== input.providerSlug) continue;
+    if (run.targetModelId !== input.targetModelId) continue;
+    if (run.suiteId !== input.suiteId) continue;
+    const severity = riskSeverity(run.status);
+    const assertion = severity ? riskAssertions(run.assertions, severity).find((candidate) => candidate.id === assertionId) : undefined;
+    if (!assertion) continue;
+    return {
+      assertion,
+      createdAt: run.createdAt,
+      input: {
+        id: run.runId,
+        workspaceId: run.workspaceId,
+        nodeId: run.nodeId,
+        providerSlug: run.providerSlug,
+        suiteId: run.suiteId,
+        targetModelId: run.targetModelId,
+        status: run.status,
+        confidence: run.confidence,
+        metrics: run.metrics,
+        evidenceSummary: run.evidenceSummary
+      }
+    };
+  }
+  return undefined;
 }
 
 function riskSeverity(status: string): RiskFlagSeverity | undefined {

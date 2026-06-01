@@ -32,6 +32,8 @@ describe("validateDockerDeployment", () => {
         "healthcheck.ts must probe http://127.0.0.1/api/health",
         "ci.yml missing GHCR release requirement: ghcr.io/xxrenzhe/bes3:prod-latest",
         'ci.yml missing GHCR release requirement: MODELTRUTH_LIVE_SMOKE_REQUIRED: "true"',
+        "ci.yml missing GHCR release requirement: npm run postgres:migration-smoke",
+        'ci.yml missing GHCR release requirement: MODELTRUTH_POSTGRES_SMOKE_REQUIRED: "true"',
         "docker-entrypoint.sh must run scripts/db-init.ts",
         "docker-entrypoint.sh must fail closed with set -e",
         "supervisord.conf missing program: audit-worker",

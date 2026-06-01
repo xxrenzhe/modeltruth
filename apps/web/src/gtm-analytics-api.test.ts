@@ -52,14 +52,15 @@ describe("GTM analytics APIs", () => {
     }));
     const allowed = await recordExternalMetric(jsonRequest(
       "http://localhost/api/gtm/external-metrics",
-      { source: "github_stars", metricValue: 1001, metadata: { repo: "xxrenzhe/modeltruth", token: "sk-secret" } },
+      { source: "cli_installs", metricValue: 501, metadata: { package: "modeltruth-cli", token: "sk-secret" } },
       "Bearer gtm_secret"
     ));
     const snapshot = await buildGtmMetricsSnapshot({ now: new Date(), windowDays: 30 });
 
     expect(denied.status).toBe(401);
     expect(allowed.status).toBe(200);
-    expect(snapshot.launch.githubStars).toBe(1001);
+    expect(snapshot.launch.cliInstalls).toBe(501);
+    expect(snapshot.beta30Targets.cliInstallsProgress).toBe(1);
     expect(JSON.stringify(snapshot)).not.toContain("sk-secret");
   });
 });

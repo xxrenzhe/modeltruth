@@ -1,13 +1,16 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { ensureSqliteReady } from "./index";
 import { createAuthRepository } from "./auth";
 import { encryptSecret, getSecretSuffix } from "@modeltruth/crypto";
 import { createAlertChannelRepository } from "./alert-channels";
 import { saveAuditRun } from "./audit-runs";
+import { createJobRepository } from "./jobs";
 import { createProviderNodeRepository } from "./provider-nodes";
+import { createProviderSubscriptionRepository } from "./provider-subscriptions";
 
 describe("AuthRepository", () => {
   it("creates a workspace-backed session from a single-use magic link", async () => {
@@ -114,10 +117,13 @@ describe("AuthRepository", () => {
     const repo = await createAuthRepository();
     const link = await repo.createMagicLink("delete@example.com", 60);
     const result = await repo.consumeMagicLink(link.token);
+    const workspaceId = result!.session.workspace.id;
+    await createDeleteFixtures(workspaceId);
     const deleted = result ? await repo.deleteUserAccount(result.session.user.id) : false;
     const session = result ? await repo.getSession(result.sessionToken) : undefined;
     const exported = result ? await repo.exportUserData(result.session.user.id) : undefined;
     await repo.close();
+    const residual = countDeleteResiduals(process.env.DATABASE_PATH, workspaceId, "delete@example.com");
 
     if (previousPath === undefined) delete process.env.DATABASE_PATH;
     else process.env.DATABASE_PATH = previousPath;
@@ -126,5 +132,68 @@ describe("AuthRepository", () => {
     expect(deleted).toBe(true);
     expect(session).toBeUndefined();
     expect(exported).toBeUndefined();
+    expect(residual).toEqual({
+      users: 0,
+      workspaces: 0,
+      providerNodesWithKeyMaterial: 0,
+      alertChannels: 0,
+      providerSubscriptions: 0,
+      jobsWithWorkspacePayload: 0
+    });
   });
 });
+
+async function createDeleteFixtures(workspaceId: string) {
+  const nodes = await createProviderNodeRepository();
+  await nodes.create({
+    workspaceId,
+    name: "Delete target",
+    baseUrl: "https://api.example.com/v1",
+    baseUrlHostHash: "host_hash",
+    modelId: "gpt-5.1",
+    encryptedApiKey: encryptSecret("sk-delete-secret"),
+    apiKeySuffix: getSecretSuffix("sk-delete-secret")
+  });
+  await nodes.close();
+
+  const alerts = await createAlertChannelRepository();
+  await alerts.create({
+    workspaceId,
+    type: "webhook",
+    encryptedTarget: encryptSecret("https://hooks.example.com/delete-secret"),
+    targetSuffix: "hooks.example.com"
+  });
+  await alerts.close();
+
+  const subscriptions = await createProviderSubscriptionRepository();
+  await subscriptions.create({ providerSlug: "openrouter", email: "delete@example.com", notificationType: "risk_trend" });
+  await subscriptions.close();
+
+  const jobs = await createJobRepository();
+  await jobs.enqueue({ type: "deepAudit", payload: { workspaceId, apiKey: "sk-delete-secret" } });
+  await jobs.close();
+}
+
+function countDeleteResiduals(databasePath: string, workspaceId: string, email: string) {
+  const db = new DatabaseSync(databasePath);
+  try {
+    return {
+      users: count(db, "select count(*) as count from users where email = ?", email),
+      workspaces: count(db, "select count(*) as count from workspaces where id = ?", workspaceId),
+      providerNodesWithKeyMaterial: count(
+        db,
+        "select count(*) as count from provider_nodes where workspace_id = ? and (encrypted_api_key is not null or api_key_suffix is not null)",
+        workspaceId
+      ),
+      alertChannels: count(db, "select count(*) as count from alert_channels where workspace_id = ?", workspaceId),
+      providerSubscriptions: count(db, "select count(*) as count from provider_subscriptions where email = ?", email),
+      jobsWithWorkspacePayload: count(db, "select count(*) as count from jobs where payload_json like ?", `%"workspaceId":"${workspaceId}"%`)
+    };
+  } finally {
+    db.close();
+  }
+}
+
+function count(db: DatabaseSync, sql: string, param: string) {
+  return (db.prepare(sql).get(param) as { count: number }).count;
+}

@@ -19,6 +19,7 @@
     "third-party:validate": "tsx scripts/validate-third-party-notices.ts",
     "audit-suite:governance": "tsx scripts/validate-audit-suite-governance.ts",
     "live-smoke:gate": "tsx scripts/live-smoke-gate.ts",
+    "postgres:migration-smoke": "tsx scripts/postgres-migration-smoke.ts",
     "db:init": "tsx scripts/db-init.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:validate": "tsx scripts/validate-db-schema.ts",

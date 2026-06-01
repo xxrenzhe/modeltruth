@@ -89,6 +89,32 @@ describe("audit run evidence persistence", () => {
       evidenceSummary: { requestBodyStored: false }
     });
     await saveAuditRun({
+      id: "run_high_confidence_warning",
+      providerSlug: "openai",
+      suiteId: "context-lite",
+      suiteVersion: "1.0.0",
+      runType: "heartbeat",
+      targetModelId: "gpt-5.1",
+      status: "warning",
+      confidence: 0.92,
+      metrics: { ttftMs: 920, statusCode: 200 },
+      assertions: [{ id: "CONTEXT_NEEDLE_RETRIEVAL", status: "warning" }],
+      evidenceSummary: { requestBodyStored: false }
+    });
+    await saveAuditRun({
+      id: "run_high_confidence_pass_retest",
+      providerSlug: "openai",
+      suiteId: "context-lite",
+      suiteVersion: "1.0.0",
+      runType: "heartbeat",
+      targetModelId: "gpt-5.1",
+      status: "pass",
+      confidence: 0.9,
+      metrics: { ttftMs: 870, statusCode: 200 },
+      assertions: [{ id: "CONTEXT_NEEDLE_RETRIEVAL", status: "pass" }],
+      evidenceSummary: { requestBodyStored: false, retestOf: "run_high_confidence_warning" }
+    });
+    await saveAuditRun({
       id: "run_old",
       providerSlug: "anthropic",
       suiteId: "smoke",
@@ -123,10 +149,10 @@ describe("audit run evidence persistence", () => {
     expect(JSON.stringify(evidence)).not.toContain("sk-");
     expect(runs.map((run) => run.runId)).toContain("run_warning");
     expect(runs.find((run) => run.runId === "run_test")?.traceId).toBe("1234567890abcdef1234567890abcdef");
-    expect(summary.totalRuns).toBe(5);
-    expect(summary.windows["24h"].totalRuns).toBe(4);
-    expect(summary.windows["7d"].totalRuns).toBe(4);
-    expect(summary.windows["30d"].totalRuns).toBe(5);
+    expect(summary.totalRuns).toBe(7);
+    expect(summary.windows["24h"].totalRuns).toBe(6);
+    expect(summary.windows["7d"].totalRuns).toBe(6);
+    expect(summary.windows["30d"].totalRuns).toBe(7);
     expect(summary.isFresh).toBe(true);
     expect(summary.dataFreshnessSeconds).toBeLessThanOrEqual(600);
     expect(summary.lastRunAt).toBeTruthy();
@@ -134,15 +160,16 @@ describe("audit run evidence persistence", () => {
     expect(summary.evidenceScore).toBeGreaterThan(0);
     expect(summary.providers.find((provider) => provider.providerSlug === "openai")?.evidenceScore).toBeGreaterThan(0);
     expect(summary.providers.find((provider) => provider.providerSlug === "openai")?.isFresh).toBe(true);
-    expect(openaiSummary.totalRuns).toBe(3);
+    expect(openaiSummary.totalRuns).toBe(5);
     expect(openaiSummary.isFresh).toBe(true);
-    expect(openaiSummary.passRate).toBe(1 / 3);
+    expect(openaiSummary.passRate).toBe(2 / 5);
     expect(persistedFlags).toHaveLength(1);
     expect(persistedFlags[0]).toMatchObject({ providerSlug: "openai", assertionId: "OVERALL_STATUS", evidenceCount: 2 });
     expect(persistedEvidence.map((item) => item.runId)).toEqual(["run_warning", "run_warning_retest"]);
     expect(JSON.stringify(persistedEvidence)).not.toContain("sk-public-summary-leak");
     expect(summary.riskFlags.map((run) => run.runId)).toEqual(expect.arrayContaining(["run_warning", "run_warning_retest"]));
     expect(summary.riskFlags.map((run) => run.runId)).not.toContain("run_single_warning");
+    expect(summary.riskFlags.map((run) => run.runId)).not.toContain("run_high_confidence_warning");
     expect(JSON.stringify(summary.riskFlags)).not.toContain("ws_private");
     expect(JSON.stringify(summary.riskFlags)).not.toContain("node_private");
     expect(JSON.stringify(summary.riskFlags)).not.toContain("authorization");
