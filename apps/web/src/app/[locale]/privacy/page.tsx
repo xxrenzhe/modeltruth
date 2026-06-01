@@ -94,6 +94,14 @@ export default function PrivacyPage() {
           </p>
         </section>
         <section>
+          <h2>Security incidents and key rotation</h2>
+          <p>
+            If API key exposure or evidence leakage cannot be ruled out, ModelTruth disables the affected audit path,
+            reviews structured logs and evidence packages, notifies affected users to rotate keys and publishes an
+            initial incident note within 24 hours when notice is required.
+          </p>
+        </section>
+        <section>
           <h2>Your rights</h2>
           <p>
             You may request access, export or deletion from <a href="/en/settings/privacy">Privacy settings</a>.

@@ -37,7 +37,11 @@ describe("legal compliance pages", () => {
       "Notice at Collection",
       "We do not sell personal information",
       "we do not share personal information for",
-      "cross-context behavioral advertising"
+      "cross-context behavioral advertising",
+      "Security incidents and key rotation",
+      "disables the affected audit path",
+      "notifies affected users to rotate keys",
+      "initial incident note within 24 hours"
     ]) {
       expect(source).toContain(required);
     }

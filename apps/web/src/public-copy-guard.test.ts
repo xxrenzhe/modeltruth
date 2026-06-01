@@ -22,6 +22,7 @@ const publicCopyFiles = [
   "launch/faq.md",
   "launch/hacker-news-launch-comment.md",
   "launch/product-hunt-assets.md",
+  "launch/security-incident-response.md",
   "packages/i18n/src/index.ts",
   "packages/seo/src/index.ts"
 ];

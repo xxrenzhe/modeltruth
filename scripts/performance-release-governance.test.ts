@@ -152,6 +152,10 @@ function writeLaunchFixture(cwd: string) {
     path.join(launchDir, "beta-transparency-changelog.md"),
     "CLI telemetry remains off by default\nconsent=true\n48-hour response target\nnot endorsements or legal conclusions\n"
   );
+  writeFileSync(
+    path.join(launchDir, "security-incident-response.md"),
+    "Disable the affected audit path immediately\nNotify affected users to rotate keys\nstructured logs\nPublish an initial incident note within 24 hours\nregulatory notification duties\n"
+  );
   writeFileSync(path.join(launchDir, "faq.md"), Array.from({ length: 10 }, (_, index) => `## Q${index + 1}\nA`).join("\n"));
   for (const file of ["one.md", "two.md", "three.md"]) writeFileSync(path.join(launchDir, "blog", file), "blog\n");
   for (const file of ["dashboard-screenshot.svg", "playground-demo.svg", "product-hunt-gallery.svg"]) {

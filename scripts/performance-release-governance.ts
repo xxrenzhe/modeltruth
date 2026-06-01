@@ -249,7 +249,8 @@ function validateLaunchMaterials(cwd: string) {
     "hacker-news-launch-comment.md",
     "faq.md",
     "anonymous-baseline-report.md",
-    "beta-transparency-changelog.md"
+    "beta-transparency-changelog.md",
+    "security-incident-response.md"
   ];
   for (const file of requiredFiles) {
     if (!existsSync(path.join(launchDir, file))) issues.push(`Missing launch material: launch/${file}`);
@@ -282,6 +283,13 @@ function validateLaunchMaterialContent(launchDir: string) {
       "consent=true",
       "48-hour response target",
       "not endorsements or legal conclusions"
+    ],
+    "security-incident-response.md": [
+      "Disable the affected audit path immediately",
+      "Notify affected users to rotate keys",
+      "structured logs",
+      "Publish an initial incident note within 24 hours",
+      "regulatory notification duties"
     ]
   };
   return Object.entries(requiredSnippets).flatMap(([file, snippets]) => {
