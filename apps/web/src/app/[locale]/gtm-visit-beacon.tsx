@@ -1,44 +1,42 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-
-const visitorKey = "modeltruth.gtm.visitor.v1";
+import { classifyGtmSurface, getGtmVisitorId, grantGtmTelemetryConsent, hasGtmTelemetryConsent } from "./gtm-consent";
 
 export function GtmVisitBeacon() {
   const pathname = usePathname();
+  const [consented, setConsented] = useState(false);
 
   useEffect(() => {
-    const surface = classifySurface(pathname);
-    const visitorId = getVisitorId();
-    const body = JSON.stringify({ surface, visitorId });
+    setConsented(hasGtmTelemetryConsent());
+  }, []);
+
+  useEffect(() => {
+    if (!consented) return;
+    const surface = classifyGtmSurface(pathname);
+    const visitorId = getGtmVisitorId();
+    const body = JSON.stringify({ consent: true, surface, visitorId });
     if (navigator.sendBeacon) {
       navigator.sendBeacon("/api/gtm/visit", new Blob([body], { type: "application/json" }));
       return;
     }
     void fetch("/api/gtm/visit", { method: "POST", headers: { "content-type": "application/json" }, body, keepalive: true });
-  }, [pathname]);
+  }, [consented, pathname]);
 
-  return null;
-}
-
-function getVisitorId() {
-  try {
-    const existing = localStorage.getItem(visitorKey);
-    if (existing) return existing;
-    const created = crypto.randomUUID();
-    localStorage.setItem(visitorKey, created);
-    return created;
-  } catch {
-    return crypto.randomUUID();
-  }
-}
-
-function classifySurface(pathname: string | null) {
-  const path = pathname ?? "";
-  if (path.includes("/providers/")) return "provider_board";
-  if (path.includes("/playground")) return "playground";
-  if (path.includes("/pricing")) return "pricing";
-  if (/^\/(en|zh-CN|ja|ko|de|fr)$/.test(path) || path.endsWith("/methodology")) return "public_dashboard";
-  return "site";
+  if (consented) return null;
+  return (
+    <aside aria-label="Telemetry consent" className="gtmConsentBanner">
+      <span>Help improve ModelTruth with anonymous visit telemetry. No API keys, prompts or completions are collected.</span>
+      <button
+        onClick={() => {
+          grantGtmTelemetryConsent();
+          setConsented(true);
+        }}
+        type="button"
+      >
+        Allow
+      </button>
+    </aside>
+  );
 }

@@ -4,6 +4,9 @@ import { createGtmAnalyticsRepository, type GtmTrafficSurface } from "@modeltrut
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    if (body.consent !== true) {
+      return NextResponse.json({ recorded: false, reason: "consent_required" }, { status: 202 });
+    }
     const repo = await createGtmAnalyticsRepository();
     try {
       await repo.recordVisit({

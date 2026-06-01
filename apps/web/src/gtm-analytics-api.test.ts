@@ -23,11 +23,13 @@ describe("GTM analytics APIs", () => {
   it("records privacy-preserving visit surfaces without storing raw paths", async () => {
     await setupDatabase();
     const first = await recordVisit(jsonRequest("http://localhost/api/gtm/visit", {
+      consent: true,
       surface: "provider_board",
       visitorId: "browser-visitor-1",
       path: "/en/providers/openrouter"
     }));
     const second = await recordVisit(jsonRequest("http://localhost/api/gtm/visit", {
+      consent: true,
       surface: "provider_board",
       visitorId: "browser-visitor-1"
     }));
@@ -40,6 +42,20 @@ describe("GTM analytics APIs", () => {
     expect(snapshot.launch.dashboardWeeklyActiveVisitors).toBe(1);
     expect(serialized).not.toContain("browser-visitor-1");
     expect(serialized).not.toContain("/en/providers/openrouter");
+  });
+
+  it("does not record web visit telemetry without explicit opt-in consent", async () => {
+    await setupDatabase();
+    const response = await recordVisit(jsonRequest("http://localhost/api/gtm/visit", {
+      surface: "pricing",
+      visitorId: "browser-visitor-without-consent"
+    }));
+    const snapshot = await buildGtmMetricsSnapshot({ now: new Date(), windowDays: 30 });
+
+    expect(response.status).toBe(202);
+    expect(await response.json()).toEqual({ recorded: false, reason: "consent_required" });
+    expect(snapshot.launch.monthlyVisits).toBe(0);
+    expect(JSON.stringify(snapshot)).not.toContain("browser-visitor-without-consent");
   });
 
   it("requires the internal token before importing CLI influence snapshots", async () => {
