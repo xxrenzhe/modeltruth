@@ -3,6 +3,8 @@ import type { ApiProvider, ProviderResponse, VarValue } from "promptfoo";
 import { assertPublicResolvedAddresses, validatePublicHttpsUrl } from "@modeltruth/shared";
 
 const maxResponseBodyBytes = 2 * 1024 * 1024;
+const defaultRequestTimeoutMs = 30_000;
+const maxRequestTimeoutMs = 60_000;
 
 export interface ModelTruthPromptfooProviderOptions {
   baseUrl: string;
@@ -42,8 +44,8 @@ export class ModelTruthPromptfooProvider implements ApiProvider {
     const url = validateBaseUrl(this.options.baseUrl);
     const fetchImpl = this.options.fetchImpl ?? fetch;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.options.timeoutMs ?? 30_000);
-    const signal = options?.abortSignal ?? controller.signal;
+    const timeout = setTimeout(() => controller.abort(), normalizeRequestTimeoutMs(this.options.timeoutMs));
+    const abortSignal = combineAbortSignals(controller.signal, options?.abortSignal);
 
     try {
       await assertResolvedAddressesArePublic(url, this.options.dnsLookup);
@@ -60,7 +62,7 @@ export class ModelTruthPromptfooProvider implements ApiProvider {
           temperature: 0
         }),
         redirect: "manual",
-        signal
+        signal: abortSignal.signal
       });
       rejectCrossHostRedirect(url, response);
       const ttftMs = Date.now() - startedAt;
@@ -88,6 +90,7 @@ export class ModelTruthPromptfooProvider implements ApiProvider {
       } satisfies ProviderResponse;
     } finally {
       clearTimeout(timeout);
+      abortSignal.cleanup();
     }
   }
 }
@@ -147,9 +150,41 @@ function buildChatCompletionsUrl(baseUrl: URL): string {
 }
 
 async function readLimitedResponse(response: Response, maxBytes: number): Promise<string> {
-  const text = await response.text();
-  if (new TextEncoder().encode(text).byteLength > maxBytes) throw new Error(`Response body exceeded ${maxBytes} bytes`);
-  return text;
+  const reader = response.body?.getReader();
+  if (!reader) {
+    const text = await response.text();
+    if (new TextEncoder().encode(text).byteLength > maxBytes) throw new Error(`Response body exceeded ${maxBytes} bytes`);
+    return text;
+  }
+
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        throw new Error(`Response body exceeded ${maxBytes} bytes`);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return new TextDecoder().decode(concatBytes(chunks, totalBytes));
+}
+
+function concatBytes(chunks: Uint8Array[], totalBytes: number) {
+  const combined = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return combined;
 }
 
 function parseJsonObject(text: string): Record<string, unknown> {
@@ -187,6 +222,27 @@ function mapPromptfooTokenUsage(usage: unknown): ProviderResponse["tokenUsage"] 
 
 function numberValue(value: unknown) {
   return typeof value === "number" ? value : undefined;
+}
+
+function normalizeRequestTimeoutMs(timeoutMs: number | undefined) {
+  if (timeoutMs === undefined || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return defaultRequestTimeoutMs;
+  return Math.min(Math.floor(timeoutMs), maxRequestTimeoutMs);
+}
+
+function combineAbortSignals(primary: AbortSignal, secondary?: AbortSignal) {
+  if (!secondary) return { signal: primary, cleanup: () => undefined };
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  primary.addEventListener("abort", abort, { once: true });
+  secondary.addEventListener("abort", abort, { once: true });
+  if (primary.aborted || secondary.aborted) abort();
+  return {
+    signal: controller.signal,
+    cleanup() {
+      primary.removeEventListener("abort", abort);
+      secondary.removeEventListener("abort", abort);
+    }
+  };
 }
 
 function allowlistHeaders(headers: Headers): Record<string, string> {

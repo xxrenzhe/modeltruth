@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { LiteLLMAdapter } from "./litellm-adapter";
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("LiteLLMAdapter", () => {
   it("calls a LiteLLM OpenAI-compatible proxy without storing prompt output", async () => {
@@ -90,4 +94,59 @@ describe("LiteLLMAdapter", () => {
     });
     await expect(oversized.callApi("ping")).rejects.toThrow("LiteLLM response exceeded 2097152 bytes");
   });
+
+  it("keeps the 30 second internal timeout when a caller supplies an abort signal", async () => {
+    vi.useFakeTimers();
+    const fetchImpl = vi.fn(
+      async (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          (init?.signal as AbortSignal).addEventListener("abort", () => reject(new Error("AbortError")), { once: true });
+        })
+    );
+    const adapter = new LiteLLMAdapter({
+      proxyBaseUrl: "https://llm-gateway.example.com/v1",
+      apiKey: "sk-litellm",
+      model: "openai/gpt-5.1",
+      fetchImpl: fetchImpl as typeof fetch
+    });
+    const externalController = new AbortController();
+
+    const call = adapter.callApi("ping", undefined, { abortSignal: externalController.signal }).catch((error: unknown) => error);
+    await flushMicrotasks();
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(externalController.signal.aborted).toBe(false);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(call).resolves.toMatchObject({ message: "AbortError" });
+  });
+
+  it("caps LiteLLM custom timeouts at the 60 second single-run limit", async () => {
+    vi.useFakeTimers();
+    const fetchImpl = vi.fn(
+      async (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          (init?.signal as AbortSignal).addEventListener("abort", () => reject(new Error("AbortError")), { once: true });
+        })
+    );
+    const adapter = new LiteLLMAdapter({
+      proxyBaseUrl: "https://llm-gateway.example.com/v1",
+      apiKey: "sk-litellm",
+      model: "openai/gpt-5.1",
+      fetchImpl: fetchImpl as typeof fetch,
+      timeoutMs: 90_000
+    });
+
+    const call = adapter.callApi("ping").catch((error: unknown) => error);
+    await flushMicrotasks();
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(call).resolves.toMatchObject({ message: "AbortError" });
+  });
 });
+
+async function flushMicrotasks() {
+  for (let index = 0; index < 5; index += 1) await Promise.resolve();
+}

@@ -3,6 +3,8 @@ import type { ApiProvider, ProviderResponse } from "promptfoo";
 import { assertPublicResolvedAddresses, isPublicHostname } from "@modeltruth/shared";
 
 const maxResponseBodyBytes = 2 * 1024 * 1024;
+const defaultRequestTimeoutMs = 30_000;
+const maxRequestTimeoutMs = 60_000;
 
 export interface ProviderAdapter extends ApiProvider {
   readonly adapterKind: "direct-openai-compatible" | "litellm";
@@ -34,7 +36,8 @@ export class LiteLLMAdapter implements ProviderAdapter {
     const proxyUrl = validateProxyUrl(this.options.proxyBaseUrl, this.options.allowLocalProxy);
     const fetchImpl = this.options.fetchImpl ?? fetch;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.options.timeoutMs ?? 30_000);
+    const timeout = setTimeout(() => controller.abort(), normalizeRequestTimeoutMs(this.options.timeoutMs));
+    const abortSignal = combineAbortSignals(controller.signal, options?.abortSignal);
 
     try {
       await assertResolvedAddressesArePublic(proxyUrl, this.options.allowLocalProxy, this.options.dnsLookup);
@@ -52,7 +55,7 @@ export class LiteLLMAdapter implements ProviderAdapter {
           temperature: 0
         }),
         redirect: "manual",
-        signal: options?.abortSignal ?? controller.signal
+        signal: abortSignal.signal
       });
       rejectCrossHostRedirect(proxyUrl, response);
       const rawText = await readLimitedResponse(response, maxResponseBodyBytes);
@@ -74,6 +77,7 @@ export class LiteLLMAdapter implements ProviderAdapter {
       } satisfies ProviderResponse;
     } finally {
       clearTimeout(timeout);
+      abortSignal.cleanup();
     }
   }
 }
@@ -120,9 +124,31 @@ function materializeMessages(prompt: string, vars?: Record<string, unknown>) {
 }
 
 async function readLimitedResponse(response: Response, maxBytes: number) {
-  const text = await response.text();
-  if (new TextEncoder().encode(text).byteLength > maxBytes) throw new Error(`LiteLLM response exceeded ${maxBytes} bytes`);
-  return text;
+  const reader = response.body?.getReader();
+  if (!reader) {
+    const text = await response.text();
+    if (new TextEncoder().encode(text).byteLength > maxBytes) throw new Error(`LiteLLM response exceeded ${maxBytes} bytes`);
+    return text;
+  }
+
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        throw new Error(`LiteLLM response exceeded ${maxBytes} bytes`);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return new TextDecoder().decode(concatBytes(chunks, totalBytes));
 }
 
 function parseJsonObject(text: string): Record<string, unknown> {
@@ -160,6 +186,37 @@ function mapPromptfooTokenUsage(usage: unknown): ProviderResponse["tokenUsage"] 
 
 function numberValue(value: unknown) {
   return typeof value === "number" ? value : undefined;
+}
+
+function normalizeRequestTimeoutMs(timeoutMs: number | undefined) {
+  if (timeoutMs === undefined || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return defaultRequestTimeoutMs;
+  return Math.min(Math.floor(timeoutMs), maxRequestTimeoutMs);
+}
+
+function combineAbortSignals(primary: AbortSignal, secondary?: AbortSignal) {
+  if (!secondary) return { signal: primary, cleanup: () => undefined };
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  primary.addEventListener("abort", abort, { once: true });
+  secondary.addEventListener("abort", abort, { once: true });
+  if (primary.aborted || secondary.aborted) abort();
+  return {
+    signal: controller.signal,
+    cleanup() {
+      primary.removeEventListener("abort", abort);
+      secondary.removeEventListener("abort", abort);
+    }
+  };
+}
+
+function concatBytes(chunks: Uint8Array[], totalBytes: number) {
+  const combined = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return combined;
 }
 
 function rejectCrossHostRedirect(baseUrl: URL, response: Response) {
