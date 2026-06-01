@@ -82,6 +82,18 @@ describe("CLI upload evidence persistence", () => {
     expect(response.status).toBe(400);
     expect(body.error).toBe("consent=true is required");
   });
+
+  it("rejects unregistered CLI upload suites before persisting evidence", async () => {
+    const session = await createLoggedInSession();
+
+    const response = await uploadCliReport(jsonRequest({ consent: true, suiteId: "unknown-suite@1.0.0", status: "warning" }));
+    const body = await response.json();
+    const runs = await listAuditRuns({ workspaceId: session.workspace.id });
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Unsupported audit suite: unknown-suite@1.0.0");
+    expect(runs).toHaveLength(0);
+  });
 });
 
 async function createLoggedInSession() {

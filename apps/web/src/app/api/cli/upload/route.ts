@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAuditSuite } from "@modeltruth/audit-engine";
 import { redactSecrets } from "@modeltruth/crypto";
 import { saveAuditRun } from "@modeltruth/db";
 import { getCurrentSession } from "../../../../lib/auth";
@@ -11,7 +12,12 @@ export async function POST(request: Request) {
   if (body.consent !== true) return NextResponse.json({ error: "consent=true is required" }, { status: 400 });
 
   const reportId = crypto.randomUUID();
-  const parsedSuite = parseSuiteId(String(body.suiteId ?? "smoke@1.0.0"));
+  let parsedSuite;
+  try {
+    parsedSuite = getAuditSuite(String(body.suiteId ?? "smoke@1.0.0"));
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unsupported audit suite" }, { status: 400 });
+  }
   const payload = redactSecrets({
     id: reportId,
     workspaceId: session.workspace.id,
@@ -41,11 +47,6 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({ uploaded: true, runId: reportId, report: payload });
-}
-
-function parseSuiteId(value: string) {
-  const [suiteId, suiteVersion = "1.0.0"] = value.split("@");
-  return { suiteId: suiteId || "smoke", suiteVersion };
 }
 
 function sanitizeMetrics(value: unknown) {
