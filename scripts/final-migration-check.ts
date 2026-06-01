@@ -24,6 +24,11 @@ type MigrationHistoryRow = {
   lastError?: string;
 };
 
+type HistoryReadResult = {
+  rows: MigrationHistoryRow[];
+  issues: string[];
+};
+
 type MigrationCheckOptions = {
   cwd: string;
   databaseType: DatabaseType;
@@ -80,11 +85,14 @@ export async function runFinalMigrationCheck(options: MigrationCheckOptions): Pr
   ];
 
   const expected = options.databaseType === "postgres" ? postgresMigrations : sqliteMigrations;
-  const history =
+  const historyResult =
     options.databaseType === "postgres"
       ? await readPostgresHistory(options.databaseUrl)
       : await readSqliteHistory(options.databasePath);
-  issues.push(...validateHistory(expected, history, options.databaseType));
+  issues.push(...historyResult.issues);
+  if (historyResult.issues.length === 0) {
+    issues.push(...validateHistory(expected, historyResult.rows, options.databaseType));
+  }
 
   return { ok: issues.length === 0, checked: expected.length, issues };
 }
@@ -201,12 +209,17 @@ function hasNonEmptyList(value: unknown): value is string[] {
   return Array.isArray(value) && value.some((item) => typeof item === "string" && item.trim().length > 0);
 }
 
-async function readSqliteHistory(databasePath: string | undefined): Promise<MigrationHistoryRow[]> {
-  if (!databasePath || !existsSync(databasePath)) return [];
+async function readSqliteHistory(databasePath: string | undefined): Promise<HistoryReadResult> {
+  if (!databasePath || !existsSync(databasePath)) return { rows: [], issues: [] };
   const { DatabaseSync } = await import("node:sqlite");
   const db = new DatabaseSync(databasePath);
   try {
-    return db
+    const issues = validateMigrationHistoryColumns(
+      (db.prepare("pragma table_info(migration_history)").all() as Array<{ name: string }>).map((row) => row.name),
+      "sqlite"
+    );
+    if (issues.length > 0) return { rows: [], issues };
+    const rows = db
       .prepare(
         `select migration_name as migrationName, file_hash as fileHash, executed_at as executedAt
                 , status, failed_at as failedAt, last_error as lastError
@@ -214,24 +227,44 @@ async function readSqliteHistory(databasePath: string | undefined): Promise<Migr
          order by migration_name`
       )
       .all() as MigrationHistoryRow[];
+    return { rows, issues: [] };
   } finally {
     db.close();
   }
 }
 
-async function readPostgresHistory(databaseUrl: string | undefined): Promise<MigrationHistoryRow[]> {
-  if (!databaseUrl) return [];
+async function readPostgresHistory(databaseUrl: string | undefined): Promise<HistoryReadResult> {
+  if (!databaseUrl) return { rows: [], issues: [] };
   const sql = postgres(databaseUrl, { max: 1 });
   try {
-    return await sql<MigrationHistoryRow[]>`
+    const columns = await sql<{ columnName: string }[]>`
+      select column_name as "columnName"
+      from information_schema.columns
+      where table_name = 'migration_history'
+    `;
+    const issues = validateMigrationHistoryColumns(
+      columns.map((column) => column.columnName),
+      "postgres"
+    );
+    if (issues.length > 0) return { rows: [], issues };
+    const rows = await sql<MigrationHistoryRow[]>`
       select migration_name as "migrationName", file_hash as "fileHash", status,
              executed_at::text as "executedAt", failed_at::text as "failedAt", last_error as "lastError"
       from migration_history
       order by migration_name
     `;
+    return { rows, issues: [] };
   } finally {
     await sql.end();
   }
+}
+
+function validateMigrationHistoryColumns(columns: string[], databaseType: DatabaseType) {
+  const existing = new Set(columns);
+  const required = ["migration_name", "file_hash", "status", "executed_at", "failed_at", "last_error"];
+  return required
+    .filter((column) => !existing.has(column))
+    .map((column) => `${databaseType} migration_history missing required column: ${column}`);
 }
 
 function validateHistory(expected: MigrationFile[], history: MigrationHistoryRow[], databaseType: DatabaseType) {

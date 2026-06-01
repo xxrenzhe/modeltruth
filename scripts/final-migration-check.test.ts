@@ -1,6 +1,7 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { ensureSqliteReady } from "@modeltruth/db";
 import { runFinalMigrationCheck } from "./final-migration-check";
@@ -72,6 +73,34 @@ describe("runFinalMigrationCheck", () => {
     expect(result.issues).toContain("migration 000 manifest missing rollback.sqlite");
     expect(result.issues).toContain("migration 000 manifest missing validationSql.postgres");
     expect(result.issues).toContain("migration 000 manifest missing productionExecutionRecord");
+  });
+
+  it("fails closed when migration_history lacks required audit columns", async () => {
+    const cwd = mkProject();
+    writeMigrationPair(cwd, "000_init_schema_consolidated", "create table users (id text primary key);");
+    writeManifest(cwd, [{ number: "000", name: "init_schema_consolidated" }]);
+    const databasePath = path.join(cwd, "data", "modeltruth.sqlite");
+    mkdirSync(path.dirname(databasePath), { recursive: true });
+    const db = new DatabaseSync(databasePath);
+    db.exec(`
+      create table migration_history (
+        id integer primary key autoincrement,
+        migration_name text not null unique,
+        executed_at text not null
+      );
+      insert into migration_history (migration_name, executed_at)
+      values ('000_init_schema_consolidated.sql', datetime('now'));
+    `);
+    db.close();
+
+    const result = await runFinalMigrationCheck({ cwd, databaseType: "sqlite", databasePath });
+    rmSync(cwd, { recursive: true, force: true });
+
+    expect(result.ok).toBe(false);
+    expect(result.issues).toContain("sqlite migration_history missing required column: file_hash");
+    expect(result.issues).toContain("sqlite migration_history missing required column: status");
+    expect(result.issues).toContain("sqlite migration_history missing required column: failed_at");
+    expect(result.issues).toContain("sqlite migration_history missing required column: last_error");
   });
 });
 
