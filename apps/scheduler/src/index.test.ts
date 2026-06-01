@@ -246,7 +246,7 @@ describe("runSchedulerTick calibration scheduling", () => {
       runType: "heartbeat",
       targetModelId: "router-model",
       status: "warning",
-      confidence: 0.82,
+      confidence: 0.9,
       metrics: { statusCode: 500, ttftMs: 1200 },
       assertions: [{ id: "HTTP_STATUS_OK", status: "warning" }],
       evidenceSummary: { requestBodyStored: false }

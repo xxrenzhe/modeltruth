@@ -60,7 +60,7 @@ describe("modeltruth cli", () => {
           JSON.stringify({
             model: "gpt-5.1",
             choices: [{ message: { content: "modeltruth-smoke-ok" } }],
-            usage: { total_tokens: 12 }
+            usage: { total_tokens: 12, rawPrompt: "full prompt should stay local" }
           }),
           { status: 200 }
         )
@@ -95,6 +95,9 @@ describe("modeltruth cli", () => {
     expect(fetchMock.mock.calls[1]?.[0]).toBe("https://modeltruth.ai/api/cli/upload");
     expect(uploadBody.consent).toBe(true);
     expect(JSON.stringify(uploadBody)).not.toContain("sk-cli-secret");
+    expect(JSON.stringify(uploadBody)).not.toContain("https://api.example.com/v1");
+    expect(JSON.stringify(uploadBody)).not.toContain("modeltruth-smoke-ok");
+    expect(JSON.stringify(uploadBody)).not.toContain("full prompt should stay local");
   });
 
   it("reads the API key from interactive input when flags and env are absent", async () => {

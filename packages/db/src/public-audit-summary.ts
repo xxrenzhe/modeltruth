@@ -157,14 +157,39 @@ function publicRiskFlags(runs: AuditRunListItem[], riskFlagStatuses: Map<string,
     const persisted = riskFlagStatuses.get(run.runId);
     if (persisted?.status === "resolved") return false;
     const group = groups.get(riskGroupKey(run)) ?? [];
-    const confirmingRiskRuns = riskRuns(group);
-    const hasConfirmingRiskRetest = confirmingRiskRuns.some((candidate) => candidate.runId !== run.runId);
-    return confirmingRiskRuns.length >= 2 || ((run.confidence ?? 0) >= 0.85 && hasConfirmingRiskRetest);
+    return hasTwoIndependentRiskRuns(group) || hasHighConfidenceRiskWithRetest(group);
   });
 }
 
 function riskGroupKey(run: AuditRunListItem) {
   return [run.providerSlug ?? "unknown-provider", run.targetModelId, run.suiteId].join(":");
+}
+
+function hasTwoIndependentRiskRuns(group: AuditRunListItem[]) {
+  const roots = new Set(riskRuns(group).map((run) => retestRootRunId(run)));
+  return roots.size >= 2;
+}
+
+function hasHighConfidenceRiskWithRetest(group: AuditRunListItem[]) {
+  const runsById = new Map(group.map((run) => [run.runId, run]));
+  return riskRuns(group).some((run) => {
+    const highConfidenceRoot = run.confidence !== undefined && run.confidence >= 0.85;
+    const retestTarget = retestTargetRunId(run);
+    const target = retestTarget ? runsById.get(retestTarget) : undefined;
+    const highConfidenceTarget = target && ["fail", "error", "warning"].includes(target.status) && (target.confidence ?? 0) >= 0.85;
+    const hasRiskRetest = riskRuns(group).some((candidate) => retestTargetRunId(candidate) === run.runId);
+    return (highConfidenceRoot && hasRiskRetest) || Boolean(highConfidenceTarget);
+  });
+}
+
+function retestRootRunId(run: AuditRunListItem) {
+  return retestTargetRunId(run) ?? run.runId;
+}
+
+function retestTargetRunId(run: AuditRunListItem) {
+  const evidence = asRecord(run.evidenceSummary);
+  if (!evidence) return undefined;
+  return stringValue(evidence.retestOfRunId) ?? stringValue(evidence.retestOf);
 }
 
 function toPublicRiskFlag(run: AuditRunListItem, riskFlagStatuses: Map<string, { riskFlagId: string; status: string }>): PublicRiskFlag {

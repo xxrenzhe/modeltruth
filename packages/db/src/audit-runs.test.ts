@@ -115,6 +115,58 @@ describe("audit run evidence persistence", () => {
       evidenceSummary: { requestBodyStored: false, retestOf: "run_high_confidence_warning" }
     });
     await saveAuditRun({
+      id: "run_high_confidence_risk",
+      providerSlug: "anthropic",
+      suiteId: "context-lite",
+      suiteVersion: "1.0.0",
+      runType: "heartbeat",
+      targetModelId: "claude",
+      status: "warning",
+      confidence: 0.91,
+      metrics: { ttftMs: 940, statusCode: 200 },
+      assertions: [{ id: "CONTEXT_NEEDLE_RETRIEVAL", status: "warning" }],
+      evidenceSummary: { requestBodyStored: false }
+    });
+    await saveAuditRun({
+      id: "run_high_confidence_risk_retest",
+      providerSlug: "anthropic",
+      suiteId: "context-lite",
+      suiteVersion: "1.0.0",
+      runType: "heartbeat",
+      targetModelId: "claude",
+      status: "warning",
+      confidence: 0.64,
+      metrics: { ttftMs: 910, statusCode: 200 },
+      assertions: [{ id: "CONTEXT_NEEDLE_RETRIEVAL", status: "warning" }],
+      evidenceSummary: { requestBodyStored: false, retestOf: "run_high_confidence_risk" }
+    });
+    await saveAuditRun({
+      id: "run_independent_risk_a",
+      providerSlug: "mistral",
+      suiteId: "smoke",
+      suiteVersion: "1.0.0",
+      runType: "heartbeat",
+      targetModelId: "mistral-large",
+      status: "warning",
+      confidence: 0.59,
+      metrics: { ttftMs: 1100, statusCode: 200 },
+      assertions: [{ id: "USAGE_PRESENT", status: "inconclusive" }],
+      evidenceSummary: { requestBodyStored: false }
+    });
+    await saveAuditRun({
+      id: "run_independent_risk_b",
+      providerSlug: "mistral",
+      suiteId: "smoke",
+      suiteVersion: "1.0.0",
+      runType: "heartbeat",
+      targetModelId: "mistral-large",
+      status: "warning",
+      confidence: 0.61,
+      metrics: { ttftMs: 1090, statusCode: 200 },
+      assertions: [{ id: "USAGE_PRESENT", status: "inconclusive" }],
+      evidenceSummary: { requestBodyStored: false }
+    });
+    await saveAuditRun({
       id: "run_old",
       providerSlug: "anthropic",
       suiteId: "smoke",
@@ -149,14 +201,14 @@ describe("audit run evidence persistence", () => {
     expect(JSON.stringify(evidence)).not.toContain("sk-");
     expect(runs.map((run) => run.runId)).toContain("run_warning");
     expect(runs.find((run) => run.runId === "run_test")?.traceId).toBe("1234567890abcdef1234567890abcdef");
-    expect(summary.totalRuns).toBe(7);
-    expect(summary.windows["24h"].totalRuns).toBe(6);
-    expect(summary.windows["7d"].totalRuns).toBe(6);
-    expect(summary.windows["30d"].totalRuns).toBe(7);
+    expect(summary.totalRuns).toBe(11);
+    expect(summary.windows["24h"].totalRuns).toBe(10);
+    expect(summary.windows["7d"].totalRuns).toBe(10);
+    expect(summary.windows["30d"].totalRuns).toBe(11);
     expect(summary.isFresh).toBe(true);
     expect(summary.dataFreshnessSeconds).toBeLessThanOrEqual(600);
     expect(summary.lastRunAt).toBeTruthy();
-    expect(summary.providers.map((provider) => provider.providerSlug)).toEqual(["anthropic", "openai", "openrouter"]);
+    expect(summary.providers.map((provider) => provider.providerSlug)).toEqual(["anthropic", "mistral", "openai", "openrouter"]);
     expect(summary.evidenceScore).toBeGreaterThan(0);
     expect(summary.providers.find((provider) => provider.providerSlug === "openai")?.evidenceScore).toBeGreaterThan(0);
     expect(summary.providers.find((provider) => provider.providerSlug === "openai")?.isFresh).toBe(true);
@@ -167,7 +219,11 @@ describe("audit run evidence persistence", () => {
     expect(persistedFlags[0]).toMatchObject({ providerSlug: "openai", assertionId: "OVERALL_STATUS", evidenceCount: 2 });
     expect(persistedEvidence.map((item) => item.runId)).toEqual(["run_warning", "run_warning_retest"]);
     expect(JSON.stringify(persistedEvidence)).not.toContain("sk-public-summary-leak");
-    expect(summary.riskFlags.map((run) => run.runId)).toEqual(expect.arrayContaining(["run_warning", "run_warning_retest"]));
+    expect(summary.riskFlags.map((run) => run.runId)).toEqual(
+      expect.arrayContaining(["run_high_confidence_risk", "run_high_confidence_risk_retest", "run_independent_risk_a", "run_independent_risk_b"])
+    );
+    expect(summary.riskFlags.map((run) => run.runId)).not.toContain("run_warning");
+    expect(summary.riskFlags.map((run) => run.runId)).not.toContain("run_warning_retest");
     expect(summary.riskFlags.map((run) => run.runId)).not.toContain("run_single_warning");
     expect(summary.riskFlags.map((run) => run.runId)).not.toContain("run_high_confidence_warning");
     expect(JSON.stringify(summary.riskFlags)).not.toContain("ws_private");
@@ -177,10 +233,7 @@ describe("audit run evidence persistence", () => {
     expect(JSON.stringify(summary.riskFlags)).not.toContain("rawPrompt");
     expect(JSON.stringify(summary.riskFlags)).not.toContain("total_tokens");
     expect(JSON.stringify(summary.riskFlags)).not.toContain("sk-public-summary-leak");
-    expect(summary.riskFlags.find((run) => run.runId === "run_warning")?.evidenceSummary).toMatchObject({ requestBodyStored: false });
-    expect(summary.riskFlags.find((run) => run.runId === "run_warning")?.evidenceSummary).toMatchObject({
-      responseMetadata: { usage: { totalTokens: 12 } }
-    });
+    expect(summary.riskFlags.find((run) => run.runId === "run_high_confidence_risk")?.evidenceSummary).toMatchObject({ requestBodyStored: false });
     expect(resolvedSummary.riskFlags).toHaveLength(0);
     expect(JSON.stringify(summary.riskFlags)).not.toContain("private completion");
     expect(JSON.stringify(summary.riskFlags)).not.toContain("private excerpt");

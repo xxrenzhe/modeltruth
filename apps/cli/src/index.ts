@@ -152,9 +152,9 @@ async function uploadReport(report: Record<string, unknown>, flags: Record<strin
     confidence: result.confidence,
     suiteId: report.suiteId,
     model: result.model,
-    metrics: result.metrics,
-    assertions: result.assertions,
-    evidenceSummary: result.evidenceSummary
+    metrics: sanitizeMetrics(result.metrics),
+    assertions: sanitizeAssertions(result.assertions),
+    evidenceSummary: sanitizeEvidenceSummary(result.evidenceSummary)
   });
   const response = await fetch(`${apiBase}/api/cli/upload`, {
     method: "POST",
@@ -167,6 +167,51 @@ async function uploadReport(report: Record<string, unknown>, flags: Record<strin
   const body = await response.text();
   if (!response.ok) throw new Error(`Upload failed with ${response.status}: ${body}`);
   return parseJsonOrText(body);
+}
+
+function sanitizeMetrics(value: unknown) {
+  const metrics = pickObject(value, ["statusCode", "ttftMs", "totalLatencyMs", "tokenUsage", "billingVariance"]);
+  if (metrics.tokenUsage) metrics.tokenUsage = pickObject(metrics.tokenUsage, ["prompt", "completion", "total"]);
+  if (metrics.billingVariance) metrics.billingVariance = pickObject(metrics.billingVariance, ["reportedTokens", "expectedTokens", "varianceRatio"]);
+  return metrics;
+}
+
+function sanitizeAssertions(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.map((assertion) => pickObject(assertion, ["id", "status", "confidence", "message"]));
+}
+
+function sanitizeEvidenceSummary(value: unknown) {
+  const evidenceSummary = pickObject(value, [
+    "redaction",
+    "requestBodyStored",
+    "authorizationHeaderStored",
+    "storedHeaders",
+    "promptNonceHash",
+    "numericNonceHash",
+    "timestampBucket",
+    "retestRecommendation",
+    "completionHash",
+    "usageHash",
+    "calibrationSnapshotId",
+    "billingVariance"
+  ]);
+  if (evidenceSummary.storedHeaders) evidenceSummary.storedHeaders = sanitizeStoredHeaders(evidenceSummary.storedHeaders);
+  if (evidenceSummary.billingVariance) evidenceSummary.billingVariance = pickObject(evidenceSummary.billingVariance, ["reportedTokens", "expectedTokens", "varianceRatio"]);
+  return evidenceSummary;
+}
+
+function sanitizeStoredHeaders(value: unknown) {
+  return redactSecrets(pickObject(value, ["content-type", "x-request-id", "openai-processing-ms"]));
+}
+
+function pickObject(value: unknown, allowedKeys: string[]): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    allowedKeys
+      .filter((key) => Object.prototype.hasOwnProperty.call(value, key))
+      .map((key) => [key, (value as Record<string, unknown>)[key]])
+  );
 }
 
 function parseFlags(args: string[]): Record<string, string | boolean> {

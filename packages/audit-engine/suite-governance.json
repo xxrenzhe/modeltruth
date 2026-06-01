@@ -8,7 +8,7 @@
         "provider": "openai",
         "modelId": "gpt-5.1",
         "recordedAt": "2026-05-31T00:00:00.000Z",
-        "method": "seeded model registry calibration job"
+        "method": "official provider calibration job"
       }
     },
     {
@@ -18,7 +18,7 @@
         "provider": "openai",
         "modelId": "gpt-5.1",
         "recordedAt": "2026-05-31T00:00:00.000Z",
-        "method": "seeded model registry calibration job"
+        "method": "official provider calibration job"
       }
     },
     {
@@ -28,7 +28,7 @@
         "provider": "openai",
         "modelId": "gpt-5.1",
         "recordedAt": "2026-05-31T00:00:00.000Z",
-        "method": "seeded model registry calibration job"
+        "method": "official provider calibration job"
       }
     },
     {
@@ -38,7 +38,7 @@
         "provider": "openai",
         "modelId": "gpt-5.1",
         "recordedAt": "2026-05-31T00:00:00.000Z",
-        "method": "seeded model registry calibration job"
+        "method": "official provider calibration job"
       }
     },
     {
