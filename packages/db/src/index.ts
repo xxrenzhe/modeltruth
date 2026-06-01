@@ -433,6 +433,8 @@ export type { BillingRepository, UpdateWorkspaceBillingInput, WorkspaceBilling }
 export { createBillingRepository } from "./billing";
 export type { FairUseAction, WorkspaceFairUseStatus } from "./fair-use";
 export { getWorkspaceFairUseStatus } from "./fair-use";
+export type { GtmMetricsSnapshot } from "./gtm-metrics";
+export { buildGtmMetricsSnapshot } from "./gtm-metrics";
 export type {
   AlertChannelRecord,
   AlertChannelRepository,
