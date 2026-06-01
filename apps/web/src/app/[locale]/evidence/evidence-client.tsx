@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 
-interface EvidenceLabels {
+export interface EvidenceLabels {
   empty: string;
   download: string;
   riskFlags: string;
 }
 
-interface AuditRunListItem {
+export interface AuditRunListItem {
   runId: string;
   suiteId: string;
   runType: string;
@@ -19,33 +19,20 @@ interface AuditRunListItem {
   createdAt: string;
 }
 
-export function EvidenceClient({ labels }: { labels: EvidenceLabels }) {
-  const [runs, setRuns] = useState<AuditRunListItem[]>([]);
-  const [error, setError] = useState("");
-  const currentMonth = new Date().toISOString().slice(0, 7);
-
-  useEffect(() => {
-    fetch("/api/evidence")
-      .then(async (response) => {
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error ?? "Unable to load evidence");
-        setRuns(payload.runs ?? []);
-      })
-      .catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to load evidence"));
-  }, []);
-
+export function EvidenceCenterView({
+  labels,
+  runs,
+  currentMonth,
+  error,
+  onDeleteRun
+}: {
+  labels: EvidenceLabels;
+  runs: AuditRunListItem[];
+  currentMonth: string;
+  error?: string;
+  onDeleteRun?: (runId: string) => void;
+}) {
   const riskFlags = runs.filter((run) => ["warning", "fail", "error"].includes(run.status));
-
-  async function deleteRun(runId: string) {
-    setError("");
-    const response = await fetch(`/api/evidence/${runId}`, { method: "DELETE" });
-    const payload = await response.json();
-    if (!response.ok) {
-      setError(payload.error ?? "Unable to delete evidence");
-      return;
-    }
-    setRuns((current) => current.filter((run) => run.runId !== runId));
-  }
 
   return (
     <section className="workspaceGrid">
@@ -57,11 +44,13 @@ export function EvidenceClient({ labels }: { labels: EvidenceLabels }) {
             <article className="nodeCard" key={run.runId}>
               <strong>{run.targetModelId}</strong>
               <span className={`pill ${run.status === "warning" ? "warning" : "fail"}`}>{run.status}</span>
-              <p>{run.suiteId} / {run.runType}</p>
+              <p>
+                {run.suiteId} / {run.runType}
+              </p>
               <a className="button secondary" href={`/api/evidence/${run.runId}`}>
                 {labels.download}
               </a>
-              <button className="button secondary" type="button" onClick={() => void deleteRun(run.runId)}>
+              <button className="button secondary" type="button" onClick={() => onDeleteRun?.(run.runId)}>
                 Delete evidence
               </button>
             </article>
@@ -94,6 +83,14 @@ export function EvidenceClient({ labels }: { labels: EvidenceLabels }) {
                   <dd>{run.targetModelId}</dd>
                 </div>
                 <div>
+                  <dt>Suite</dt>
+                  <dd>{run.suiteId}</dd>
+                </div>
+                <div>
+                  <dt>Run type</dt>
+                  <dd>{run.runType}</dd>
+                </div>
+                <div>
                   <dt>HTTP</dt>
                   <dd>{run.metrics?.statusCode ?? "n/a"}</dd>
                 </div>
@@ -109,10 +106,42 @@ export function EvidenceClient({ labels }: { labels: EvidenceLabels }) {
               <a className="button secondary" href={`/api/evidence/${run.runId}`}>
                 {labels.download}
               </a>
+              <button className="button secondary" type="button" onClick={() => onDeleteRun?.(run.runId)}>
+                Delete evidence
+              </button>
             </article>
           ))}
         </div>
       </div>
     </section>
   );
+}
+
+export function EvidenceClient({ labels }: { labels: EvidenceLabels }) {
+  const [runs, setRuns] = useState<AuditRunListItem[]>([]);
+  const [error, setError] = useState("");
+  const currentMonth = new Date().toISOString().slice(0, 7);
+
+  useEffect(() => {
+    fetch("/api/evidence")
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error ?? "Unable to load evidence");
+        setRuns(payload.runs ?? []);
+      })
+      .catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to load evidence"));
+  }, []);
+
+  async function deleteRun(runId: string) {
+    setError("");
+    const response = await fetch(`/api/evidence/${runId}`, { method: "DELETE" });
+    const payload = await response.json();
+    if (!response.ok) {
+      setError(payload.error ?? "Unable to delete evidence");
+      return;
+    }
+    setRuns((current) => current.filter((run) => run.runId !== runId));
+  }
+
+  return <EvidenceCenterView labels={labels} runs={runs} currentMonth={currentMonth} error={error} onDeleteRun={deleteRun} />;
 }
