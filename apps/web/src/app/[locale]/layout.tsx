@@ -54,6 +54,10 @@ export default async function LocaleLayout({
             </div>
           </nav>
           {children}
+          <footer className="legalNotice">
+            <strong>{dictionary.legal.disclaimerTitle}</strong>
+            <p>{dictionary.legal.disclaimer}</p>
+          </footer>
         </main>
       </body>
     </html>

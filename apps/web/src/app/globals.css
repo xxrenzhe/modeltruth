@@ -258,6 +258,17 @@ label {
   color: var(--fail);
 }
 
+.legalNotice {
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  margin-top: 56px;
+  padding: 24px 0 8px;
+}
+
+.legalNotice p {
+  margin: 8px 0 0;
+}
+
 .statusList {
   display: grid;
   gap: 12px;

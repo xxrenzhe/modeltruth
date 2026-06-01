@@ -16,6 +16,7 @@ export default function robots(): MetadataRoute.Robots {
         "/evidence/private/",
         "/*/evidence/private/",
         "/admin/",
+        "/*/admin/",
         "/*.env",
         "/*.sql",
         "/*.bak",
