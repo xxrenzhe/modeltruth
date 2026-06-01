@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getDictionary, isLocale, type Locale } from "@modeltruth/i18n";
 import "../globals.css";
+import { GtmVisitBeacon } from "./gtm-visit-beacon";
 
 export function generateStaticParams() {
   return [{ locale: "en" }, { locale: "zh-CN" }];
@@ -35,6 +36,7 @@ export default async function LocaleLayout({
   return (
     <html lang={locale}>
       <body>
+        <GtmVisitBeacon />
         <main className="shell">
           <nav className="nav">
             <a className="brand" href={`/${locale}`}>

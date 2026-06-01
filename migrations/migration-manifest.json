@@ -360,6 +360,24 @@
         "postgres": "select table_name from information_schema.tables where table_schema='public' and table_name='waitlist_signups';"
       },
       "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
+    },
+    {
+      "number": "020",
+      "name": "gtm_analytics",
+      "sqliteMigration": "020_gtm_analytics.sql",
+      "postgresMigration": "020_gtm_analytics.pg.sql",
+      "impactQueries": [
+        "Launch KPI aggregation by daily anonymized visitor surface and latest external CLI influence snapshots."
+      ],
+      "rollback": {
+        "sqlite": "Append a forward migration disabling GTM analytics APIs and dropping gtm_daily_visitors/gtm_external_metric_snapshots before launch if required.",
+        "postgres": "Append a forward migration disabling GTM analytics APIs and dropping gtm_daily_visitors/gtm_external_metric_snapshots before launch if required."
+      },
+      "validationSql": {
+        "sqlite": "select name from sqlite_master where type='table' and name in ('gtm_daily_visitors','gtm_external_metric_snapshots');",
+        "postgres": "select table_name from information_schema.tables where table_schema='public' and table_name in ('gtm_daily_visitors','gtm_external_metric_snapshots');"
+      },
+      "productionExecutionRecord": "Pending first production deployment; verified in local SQLite by db:init and db:final-check."
     }
   ]
 }

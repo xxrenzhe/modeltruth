@@ -436,6 +436,14 @@ export { getWorkspaceFairUseStatus } from "./fair-use";
 export type { GtmMetricsSnapshot } from "./gtm-metrics";
 export { buildGtmMetricsSnapshot } from "./gtm-metrics";
 export type {
+  GtmAnalyticsRepository,
+  GtmExternalMetricSource,
+  GtmTrafficSurface,
+  RecordGtmVisitInput,
+  UpsertGtmExternalMetricInput
+} from "./gtm-analytics";
+export { createGtmAnalyticsRepository } from "./gtm-analytics";
+export type {
   AlertChannelRecord,
   AlertChannelRepository,
   AlertChannelSecretRecord,

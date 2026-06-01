@@ -9,6 +9,7 @@ import { ensureSqliteReady } from "./index";
 import { createProviderNodeRepository } from "./provider-nodes";
 import { createProviderSubscriptionRepository } from "./provider-subscriptions";
 import { saveAuditRun } from "./audit-runs";
+import { createGtmAnalyticsRepository } from "./gtm-analytics";
 import { createWaitlistRepository } from "./waitlist";
 
 describe("buildGtmMetricsSnapshot", () => {
@@ -23,6 +24,7 @@ describe("buildGtmMetricsSnapshot", () => {
     await createPaidNode(proWorkspaceId);
     await createProviderSubscription();
     await createWaitlistSignup();
+    await recordLaunchMetrics();
     await seedRun("run_playground_pass", "playground", "pass", "2026-05-20T00:00:00.000Z");
     await seedRun("run_playground_warning", "playground", "warning", "2026-05-21T00:00:00.000Z");
     await seedRun("run_cli", "cli", "pass", "2026-05-22T00:00:00.000Z");
@@ -45,6 +47,19 @@ describe("buildGtmMetricsSnapshot", () => {
     });
     expect(snapshot.revenue).toEqual({ proSubscriptions: 1, teamSubscriptions: 1, paidSubscriptions: 2, mrrUsd: 98 });
     expect(snapshot.beta30Targets).toMatchObject({ auditRunsTarget: 1000, proSubscriptionsTarget: 20, mrrUsdTarget: 380 });
+    expect(snapshot.launch).toEqual({
+      monthlyVisits: 3,
+      dashboardWeeklyActiveVisitors: 2,
+      githubStars: 333,
+      packageDownloads: 444
+    });
+    expect(snapshot.launch90Targets).toMatchObject({
+      monthlyVisitsTarget: 10000,
+      paidSubscriptionsTarget: 100,
+      mrrUsdTarget: 2500,
+      cliStarsOrDownloadsTarget: 1000,
+      dashboardWeeklyActiveVisitorsTarget: 2000
+    });
     expect(snapshot.privacy).toEqual({
       storesRawEndpointPath: false,
       storesHeaders: false,
@@ -53,6 +68,7 @@ describe("buildGtmMetricsSnapshot", () => {
     });
     expect(serialized).not.toContain("gtm-pro@example.com");
     expect(serialized).not.toContain("https://api.example.com/v1");
+    expect(serialized).not.toContain("visitor-one");
   });
 });
 
@@ -109,6 +125,31 @@ async function createWaitlistSignup() {
   const repo = await createWaitlistRepository();
   try {
     await repo.create({ email: "waitlist@example.com", source: "homepage" });
+  } finally {
+    await repo.close();
+  }
+}
+
+async function recordLaunchMetrics() {
+  const repo = await createGtmAnalyticsRepository();
+  try {
+    await repo.recordVisit({
+      surface: "public_dashboard",
+      visitorSeed: "visitor-one",
+      occurredAt: new Date("2026-05-30T00:00:00.000Z")
+    });
+    await repo.recordVisit({
+      surface: "public_dashboard",
+      visitorSeed: "visitor-one",
+      occurredAt: new Date("2026-05-30T01:00:00.000Z")
+    });
+    await repo.recordVisit({
+      surface: "provider_board",
+      visitorSeed: "visitor-two",
+      occurredAt: new Date("2026-05-31T00:00:00.000Z")
+    });
+    await repo.upsertExternalMetric({ source: "github_stars", metricValue: 333 });
+    await repo.upsertExternalMetric({ source: "package_downloads", metricValue: 444 });
   } finally {
     await repo.close();
   }
