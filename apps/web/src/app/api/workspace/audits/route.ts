@@ -3,6 +3,7 @@ import { getAuditSuite } from "@modeltruth/audit-engine";
 import { createJobRepository, createProviderNodeRepository } from "@modeltruth/db";
 import { safeErrorMessage } from "@modeltruth/shared";
 import { getCurrentSession } from "../../../../lib/auth";
+import { traceIdFromRequest } from "../../../../lib/request-trace";
 
 const manualWorkspaceSuites = new Set(["smoke", "reasoning-lite", "context-lite", "billing-lite"]);
 const manualAuditWindowMs = 10 * 60 * 1000;
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
     }
 
     const suiteId = `${suite.suiteId}@${suite.suiteVersion}`;
+    const requestId = request.headers.get("x-request-id")?.trim() || undefined;
     const fingerprint = `manual:${session.workspace.id}:${node.id}:${suiteId}`;
     const duplicate = await jobs.hasActiveFingerprint("deepAudit", fingerprint);
     const limit = manualAuditLimits[session.workspace.tier] ?? 0;
@@ -52,6 +54,8 @@ export async function POST(request: Request) {
           suiteId,
           requestedByUserId: session.user.id,
           requestedAt: new Date().toISOString(),
+          requestId,
+          traceId: traceIdFromRequest(request),
           fingerprint
         }
       });

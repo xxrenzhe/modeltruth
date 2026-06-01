@@ -4,6 +4,7 @@ import { getAuditSuite, runSmokeAudit } from "@modeltruth/audit-engine";
 import { createModelRegistryRepository, createPlaygroundQuotaRepository, saveAuditRun } from "@modeltruth/db";
 import { redactSecrets } from "@modeltruth/crypto";
 import { assertPublicResolvedAddresses, safeErrorMessage, validatePublicHttpsUrl, writeJsonLog } from "@modeltruth/shared";
+import { traceIdFromRequest } from "../../../../lib/request-trace";
 
 export async function POST(request: Request) {
   try {
@@ -26,12 +27,15 @@ export async function POST(request: Request) {
     const model = String(body.model ?? "");
     const providerSlug = providerSlugFromBaseUrl(baseUrl.toString()) ?? "custom";
     const modelProfile = await resolveModelProfile(providerSlug, model);
+    const requestId = request.headers.get("x-request-id")?.trim() || undefined;
+    const traceId = traceIdFromRequest(request);
     const result = await runSmokeAudit({
       baseUrl: baseUrl.toString(),
       apiKey: String(body.apiKey ?? ""),
       model,
       suiteId: suite,
-      modelProfile
+      modelProfile,
+      traceId
     });
 
     await saveAuditRun({
@@ -54,6 +58,7 @@ export async function POST(request: Request) {
       event: "audit.completed",
       data: {
         traceId: result.traceId,
+        requestId: requestId ?? null,
         runId: result.runId,
         workspaceId: null,
         nodeId: null,

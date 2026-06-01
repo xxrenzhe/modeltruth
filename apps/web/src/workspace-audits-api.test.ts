@@ -12,6 +12,7 @@ import {
 } from "@modeltruth/db";
 import { encryptSecret, getSecretSuffix } from "@modeltruth/crypto";
 import { POST } from "./app/api/workspace/audits/route";
+import { traceIdFromRequestId } from "./lib/request-trace";
 
 const cookieState = vi.hoisted(() => ({ sessionToken: "" }));
 
@@ -45,7 +46,7 @@ describe("workspace audits API", () => {
   it("blocks Free workspaces from manual private audits", async () => {
     const { node } = await createSessionWithNode("free");
 
-    const response = await POST(auditRequest(node.id, "billing-lite@1.0.0"));
+    const response = await POST(auditRequest(node.id, "billing-lite@1.0.0", "req-workspace-audit-123456"));
     const body = await response.json();
 
     expect(response.status).toBe(403);
@@ -55,7 +56,7 @@ describe("workspace audits API", () => {
   it("enqueues billing-lite for a Pro workspace node without exposing secret material", async () => {
     const { session, node } = await createSessionWithNode("pro");
 
-    const response = await POST(auditRequest(node.id, "billing-lite@1.0.0"));
+    const response = await POST(auditRequest(node.id, "billing-lite@1.0.0", "req-workspace-audit-123456"));
     const body = await response.json();
     const jobs = await createJobRepository();
     const claimed = await jobs.claimNext({ workerId: "workspace-audit-test", types: ["deepAudit"] });
@@ -76,6 +77,8 @@ describe("workspace audits API", () => {
       nodeId: node.id,
       suiteId: "billing-lite@1.0.0",
       requestedByUserId: session.user.id,
+      requestId: "req-workspace-audit-123456",
+      traceId: traceIdFromRequestId("req-workspace-audit-123456"),
       fingerprint: `manual:${session.workspace.id}:${node.id}:billing-lite@1.0.0`
     });
     expect(serialized).not.toContain("sk-pro-secret");
@@ -255,10 +258,10 @@ async function createAdditionalNodes(workspaceId: string, label: string, count: 
   }
 }
 
-function auditRequest(nodeId: string, suiteId: string) {
+function auditRequest(nodeId: string, suiteId: string, requestId?: string) {
   return new Request("http://localhost/api/workspace/audits", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...(requestId ? { "x-request-id": requestId } : {}) },
     body: JSON.stringify({ nodeId, suiteId })
   });
 }

@@ -47,6 +47,7 @@ export async function runWorkerTick() {
         suiteId: payload.suite,
         modelProfile,
         billingSnapshot: payload.billingSnapshot,
+        traceId: payload.traceId,
         saveFullResponse: privacySettings?.saveFullResponses === true
       });
       const parsedSuite = parseSuiteId(payload.suite);
@@ -227,6 +228,8 @@ async function parseAuditJobPayload(payloadJson: string) {
     };
     billingRetest?: boolean;
     retestOfRunId?: string;
+    requestId?: string;
+    traceId?: string;
     ttftThresholdMs?: number;
   };
 
@@ -242,6 +245,8 @@ async function parseAuditJobPayload(payloadJson: string) {
         apiKey: decryptSecret(node.encryptedApiKey),
         model: node.modelId,
         suite: payload.suiteId ?? "smoke@1.0.0",
+        requestId: payload.requestId,
+        traceId: payload.traceId,
         ttftThresholdMs: node.ttftThresholdMs,
         billingSnapshot: payload.billingSnapshot,
         billingRetest: payload.billingRetest ?? Boolean(payload.retestOfRunId),
@@ -263,6 +268,8 @@ async function parseAuditJobPayload(payloadJson: string) {
     apiKey: payload.apiKey,
     model: payload.model ?? payload.modelId!,
     suite: payload.suiteId ?? "smoke@1.0.0",
+    requestId: payload.requestId,
+    traceId: payload.traceId,
     ttftThresholdMs: payload.ttftThresholdMs,
     billingSnapshot: payload.billingSnapshot,
     billingRetest: payload.billingRetest ?? Boolean(payload.retestOfRunId),
@@ -297,6 +304,7 @@ function writeAuditCompletedLog(input: {
     event: "audit.completed",
     data: {
       traceId: input.result.traceId,
+      requestId: input.payload.requestId ?? null,
       runId: input.result.runId,
       workspaceId: input.payload.workspaceId ?? null,
       nodeId: input.payload.nodeId ?? null,

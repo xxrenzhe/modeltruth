@@ -7,9 +7,14 @@ function request(
     acceptLanguage?: string;
     cookieLocale?: string;
     userAgent?: string;
+    requestId?: string;
   } = {}
 ) {
   const url = new URL(`https://modeltruth.ai${pathname}`);
+  const headers = new Headers();
+  if (options.acceptLanguage) headers.set("accept-language", options.acceptLanguage);
+  if (options.userAgent) headers.set("user-agent", options.userAgent);
+  if (options.requestId) headers.set("x-request-id", options.requestId);
   return {
     nextUrl: {
       pathname,
@@ -22,14 +27,7 @@ function request(
         return name === "locale" && options.cookieLocale ? { value: options.cookieLocale } : undefined;
       }
     },
-    headers: {
-      get(name: string) {
-        const normalized = name.toLowerCase();
-        if (normalized === "accept-language") return options.acceptLanguage ?? "";
-        if (normalized === "user-agent") return options.userAgent ?? "";
-        return null;
-      }
-    }
+    headers
   } as never;
 }
 
@@ -55,6 +53,13 @@ describe("middleware", () => {
     expect(response?.status).toBe(307);
     expect(response?.headers.get("location")).toContain("/en/pricing");
     expect(response?.headers.get("x-request-id")).toBeTruthy();
+  });
+
+  it("preserves and forwards x-request-id to downstream route handlers", () => {
+    const response = middleware(request("/api/health", { requestId: "req-plan-123456" }));
+
+    expect(response?.headers.get("x-request-id")).toBe("req-plan-123456");
+    expect(response?.headers.get("x-middleware-request-x-request-id")).toBe("req-plan-123456");
   });
 
   it("uses locale cookie before Accept-Language for public redirects", () => {

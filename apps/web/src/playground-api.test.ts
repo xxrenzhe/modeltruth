@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it, type MockInstance, vi } from "vitest";
 import { ensureSqliteReady, getEvidencePackage } from "@modeltruth/db";
 import { POST } from "./app/api/playground/audit/route";
+import { traceIdFromRequestId } from "./lib/request-trace";
 
 describe("Playground audit API", () => {
   it("rejects private Base URLs before consuming quota or running an audit", async () => {
@@ -69,6 +70,46 @@ describe("Playground audit API", () => {
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
     harness.cleanup();
+  });
+
+  it("derives audit trace id from middleware-propagated request id", async () => {
+    const harness = await createHarness();
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "request trace 8310" } }],
+          usage: { total_tokens: 12 }
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    ) as typeof fetch;
+
+    const response = await POST(
+      new Request("http://localhost/api/playground/audit", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-request-id": "req-playground-plan-123456",
+          "x-modeltruth-fingerprint": "fp-request-trace"
+        },
+        body: JSON.stringify({
+          baseUrl: "https://api.example.com/v1",
+          model: "gpt-5.1",
+          apiKey: "sk-request-trace-secret-123456"
+        })
+      })
+    );
+    const body = await response.json();
+    const evidence = await getEvidencePackage(body.runId);
+
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+    harness.cleanup();
+
+    expect(response.status).toBe(200);
+    expect(body.traceId).toBe(traceIdFromRequestId("req-playground-plan-123456"));
+    expect(evidence?.traceId).toBe(body.traceId);
   });
 
   it("rejects billing suites that are not allowed for the Free Playground", async () => {

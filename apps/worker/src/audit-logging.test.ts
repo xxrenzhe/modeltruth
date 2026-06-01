@@ -18,7 +18,9 @@ describe("worker audit logging", () => {
           baseUrl: "https://api.example.com/v1",
           apiKey: "sk-worker-log-secret-123456",
           model: "gpt-5.1",
-          suiteId: "smoke@1.0.0"
+          suiteId: "smoke@1.0.0",
+          requestId: "req-worker-plan-123456",
+          traceId: "abcdef1234567890abcdef1234567890"
         }
       });
     } finally {
@@ -42,6 +44,8 @@ describe("worker audit logging", () => {
     expect(auditLog).toMatchObject({
       service: "worker",
       event: "audit.completed",
+      requestId: "req-worker-plan-123456",
+      traceId: "abcdef1234567890abcdef1234567890",
       workspaceId: "ws_log",
       nodeId: null,
       suiteId: "smoke",
@@ -51,7 +55,6 @@ describe("worker audit logging", () => {
       redactionApplied: true,
       runType: "deepAudit"
     });
-    expect(auditLog.traceId).toMatch(/^[a-f0-9]{32}$/);
     expect(auditLog.runId).toEqual(expect.any(String));
     expect(JSON.stringify(auditLog)).not.toContain("sk-worker-log-secret");
   });

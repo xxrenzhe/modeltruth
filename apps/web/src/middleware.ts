@@ -7,15 +7,17 @@ const ignoredPrefixes = ["/api/", "/_next/", "/sitemap.xml", "/robots.txt", "/fa
 const localeCookieName = "locale";
 
 export function middleware(request: NextRequest) {
-  const requestId = crypto.randomUUID();
+  const requestId = normalizeRequestId(request.headers.get("x-request-id")) ?? crypto.randomUUID();
   const { pathname } = request.nextUrl;
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-request-id", requestId);
 
   if (blockedPathPattern.test(pathname) || pathname.includes("/.git/") || blockedProbePattern.test(pathname)) {
     return new NextResponse("Not found", { status: 404, headers: { "x-request-id": requestId } });
   }
 
   if (ignoredPrefixes.some((prefix) => pathname.startsWith(prefix))) {
-    const response = NextResponse.next();
+    const response = NextResponse.next({ request: { headers: requestHeaders } });
     response.headers.set("x-request-id", requestId);
     return response;
   }
@@ -29,10 +31,15 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  const response = NextResponse.next();
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.cookies.set(localeCookieName, firstSegment, { path: "/", sameSite: "lax" });
   response.headers.set("x-request-id", requestId);
   return response;
+}
+
+function normalizeRequestId(value: string | null) {
+  const requestId = value?.trim();
+  return requestId && /^[A-Za-z0-9._:-]{8,128}$/.test(requestId) ? requestId : undefined;
 }
 
 function selectLocale(request: NextRequest): Locale {
