@@ -31,6 +31,7 @@ export const publicPaths = [
   "",
   "/playground",
   ...providers.map((provider) => `/providers/${provider}`),
+  "/status",
   "/methodology",
   "/pricing",
   "/privacy",

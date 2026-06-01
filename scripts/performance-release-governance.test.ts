@@ -119,6 +119,7 @@ function mkBuildFixture(options: { omitRoute?: string; cliBin?: string } = {}) {
     "/[locale]/page",
     "/[locale]/playground/page",
     "/[locale]/providers/[providerSlug]/page",
+    "/[locale]/status/page",
     "/[locale]/methodology/page",
     "/[locale]/pricing/page",
     "/[locale]/privacy/page",

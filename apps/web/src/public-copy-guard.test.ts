@@ -13,6 +13,7 @@ const publicCopyFiles = [
   "apps/web/src/app/[locale]/pricing/page.tsx",
   "apps/web/src/app/[locale]/privacy/page.tsx",
   "apps/web/src/app/[locale]/providers/[providerSlug]/page.tsx",
+  "apps/web/src/app/[locale]/status/page.tsx",
   "apps/web/src/app/[locale]/terms/page.tsx",
   "launch/anonymous-baseline-report.md",
   "launch/beta-transparency-changelog.md",

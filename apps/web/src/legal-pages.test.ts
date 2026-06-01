@@ -79,4 +79,20 @@ describe("legal compliance pages", () => {
       expect(source).toContain(required);
     }
   });
+
+  it("status page exposes provider uptime summary and incident timeline without legal conclusions", () => {
+    const source = readFileSync("apps/web/src/app/[locale]/status/page.tsx", "utf8");
+
+    for (const required of [
+      "Provider uptime summary",
+      "Incident timeline",
+      "Public provider health",
+      "Repeated public risk events",
+      "not legal conclusions",
+      "getPublicAuditSummary",
+      "application/ld+json"
+    ]) {
+      expect(source).toContain(required);
+    }
+  });
 });
