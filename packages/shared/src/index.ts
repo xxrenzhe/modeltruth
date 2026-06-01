@@ -19,6 +19,7 @@ export interface StructuredLogEvent {
 
 export type DnsLookup = (hostname: string) => Promise<Array<{ address: string }>>;
 export type ObservabilitySink = "sentry" | "axiom" | "opentelemetry";
+export type ObservabilityExporter<T> = (payload: T) => void | Promise<void>;
 
 const sensitiveKeyPattern = /(^|[._-])(api[-_]?key|authorization|x[-_]?api[-_]?key|auth[-_]?token|access[-_]?token|refresh[-_]?token|session[-_]?token|token|secret|password)($|[._-])/i;
 
@@ -57,6 +58,10 @@ export function scrubObservabilityPayload<T>(sink: ObservabilitySink, payload: T
     throw new Error("unsupported observability sink");
   }
   return scrubbed;
+}
+
+export async function exportObservabilityPayload<T>(sink: ObservabilitySink, payload: T, exporter: ObservabilityExporter<T>): Promise<void> {
+  await exporter(scrubObservabilityPayload(sink, payload));
 }
 
 export function safeErrorMessage(error: unknown, fallback: string): string {
@@ -131,6 +136,8 @@ function isLiteralIp(hostname: string) {
 
 function redactString(value: string) {
   return value
+    .replace(/\b(api[-_]?key|x[-_]?api[-_]?key|authorization)\s*[:=]\s*Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "$1: Bearer [REDACTED]")
+    .replace(/\b(api[-_]?key|x[-_]?api[-_]?key|authorization)\s*[:=]\s*["']?[A-Za-z0-9._~+/=-]{8,}["']?/gi, "$1: [REDACTED]")
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
     .replace(/\bsk-[A-Za-z0-9._-]{6,}\b/g, "sk-[REDACTED]");
 }

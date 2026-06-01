@@ -3,6 +3,7 @@ import {
   assertPublicResolvedAddresses,
   installGracefulShutdown,
   isPublicHostname,
+  exportObservabilityPayload,
   redactLogValue,
   scrubObservabilityPayload,
   safeErrorMessage,
@@ -59,7 +60,12 @@ describe("structured logger", () => {
     const payload = {
       request: { headers: { authorization: "Bearer abc.def", "x-api-key": "sk-observability-secret" } },
       tags: { apiKey: "sk-tag-secret-123456", route: "/api/playground/audit" },
-      resource: { attributes: { "http.request.header.authorization": "Bearer otel.secret" } }
+      resource: { attributes: { "http.request.header.authorization": "Bearer otel.secret" } },
+      messages: [
+        "provider rejected apiKey: anthropic-live-secret-123456",
+        "gateway returned x-api-key=gemini.secret.token",
+        "upstream saw Authorization: custom-live-token-123456"
+      ]
     };
 
     for (const sink of ["sentry", "axiom", "opentelemetry"] as const) {
@@ -68,8 +74,32 @@ describe("structured logger", () => {
       expect(serialized).not.toContain("sk-observability-secret");
       expect(serialized).not.toContain("sk-tag-secret");
       expect(serialized).not.toContain("otel.secret");
+      expect(serialized).not.toContain("anthropic-live-secret");
+      expect(serialized).not.toContain("gemini.secret.token");
+      expect(serialized).not.toContain("custom-live-token");
       expect(serialized).toContain("[REDACTED]");
     }
+  });
+
+  it("exports observability payloads only after scrubber redaction", async () => {
+    const exported: unknown[] = [];
+
+    await exportObservabilityPayload(
+      "sentry",
+      {
+        event: "audit.failed",
+        apiKey: "provider-secret-token-123456",
+        error: "Authorization=provider-secret-token-abcdef and x-api-key: gateway-secret-token-abcdef"
+      },
+      async (payload) => {
+        exported.push(payload);
+      }
+    );
+
+    const serialized = JSON.stringify(exported);
+    expect(serialized).not.toContain("provider-secret-token");
+    expect(serialized).not.toContain("gateway-secret-token");
+    expect(serialized).toContain("[REDACTED]");
   });
 
   it("redacts sensitive fragments from API-safe error messages", () => {
