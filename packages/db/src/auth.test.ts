@@ -11,6 +11,7 @@ import { saveAuditRun } from "./audit-runs";
 import { createJobRepository } from "./jobs";
 import { createProviderNodeRepository } from "./provider-nodes";
 import { createProviderSubscriptionRepository } from "./provider-subscriptions";
+import { createWorkspaceMemberRepository } from "./workspace-members";
 
 describe("AuthRepository", () => {
   it("creates a workspace-backed session from a single-use magic link", async () => {
@@ -147,6 +148,42 @@ describe("AuthRepository", () => {
       evidencePackagesWithPrivateEvidence: 0
     });
   });
+
+  it("removes team member identity from other workspaces during account deletion", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "modeltruth-auth-delete-member-"));
+    const previousPath = process.env.DATABASE_PATH;
+    process.env.DATABASE_PATH = path.join(dir, "modeltruth.sqlite");
+    await ensureSqliteReady({ cwd: process.cwd(), databasePath: process.env.DATABASE_PATH });
+
+    const repo = await createAuthRepository();
+    const owner = await repo.consumeMagicLink((await repo.createMagicLink("team-owner-delete@example.com", 60)).token);
+    const members = await createWorkspaceMemberRepository();
+    await members.invite({
+      workspaceId: owner!.session.workspace.id,
+      invitedByUserId: owner!.session.user.id,
+      email: "member-delete@example.com",
+      role: "member"
+    });
+    await members.close();
+    const member = await repo.consumeMagicLink((await repo.createMagicLink("member-delete@example.com", 60)).token);
+    const deleted = member ? await repo.deleteUserAccount(member.session.user.id) : false;
+    const ownerSession = owner ? await repo.getSession(owner.sessionToken) : undefined;
+    await repo.close();
+    const residual = countMemberResiduals(process.env.DATABASE_PATH, owner!.session.workspace.id, owner!.session.user.id, "member-delete@example.com");
+
+    if (previousPath === undefined) delete process.env.DATABASE_PATH;
+    else process.env.DATABASE_PATH = previousPath;
+    rmSync(dir, { recursive: true, force: true });
+
+    expect(deleted).toBe(true);
+    expect(ownerSession?.workspace.id).toBe(owner?.session.workspace.id);
+    expect(residual).toEqual({
+      deletedUserRows: 0,
+      deletedMemberRows: 0,
+      ownerMemberRows: 1,
+      ownerWorkspaceRows: 1
+    });
+  });
 });
 
 async function createDeleteFixtures(workspaceId: string) {
@@ -237,7 +274,21 @@ function countDeleteResiduals(databasePath: string, workspaceId: string, email: 
   }
 }
 
-function count(db: DatabaseSync, sql: string, param?: string) {
-  const row = (param === undefined ? db.prepare(sql).get() : db.prepare(sql).get(param)) as { count: number } | undefined;
+function count(db: DatabaseSync, sql: string, ...params: string[]) {
+  const row = db.prepare(sql).get(...params) as { count: number } | undefined;
   return row?.count ?? 0;
+}
+
+function countMemberResiduals(databasePath: string, workspaceId: string, ownerId: string, deletedEmail: string) {
+  const db = new DatabaseSync(databasePath);
+  try {
+    return {
+      deletedUserRows: count(db, "select count(*) as count from users where email = ?", deletedEmail),
+      deletedMemberRows: count(db, "select count(*) as count from workspace_members where email = ?", deletedEmail),
+      ownerMemberRows: count(db, "select count(*) as count from workspace_members where workspace_id = ? and user_id = ?", workspaceId, ownerId),
+      ownerWorkspaceRows: count(db, "select count(*) as count from workspaces where id = ?", workspaceId)
+    };
+  } finally {
+    db.close();
+  }
 }

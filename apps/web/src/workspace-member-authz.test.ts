@@ -9,6 +9,7 @@ import {
   ensureSqliteReady
 } from "@modeltruth/db";
 import { GET, POST } from "./app/api/workspace/members/route";
+import { POST as DELETE_ACCOUNT } from "./app/api/settings/privacy/delete/route";
 
 const cookieState = vi.hoisted(() => ({ sessionToken: "" }));
 
@@ -96,6 +97,37 @@ describe("workspace member authorization", () => {
 
     expect(response.status).toBe(403);
     expect(body.error).toBe("only workspace owners can invite team members");
+  });
+
+  it("removes a deleted member from the owner workspace member list", async () => {
+    const owner = await createSession("team");
+    const memberRepo = await createWorkspaceMemberRepository();
+    await memberRepo.invite({
+      workspaceId: owner.workspace.id,
+      invitedByUserId: owner.user.id,
+      email: "delete-member-route@example.com",
+      role: "member"
+    });
+    await memberRepo.close();
+    const auth = await createAuthRepository();
+    const memberLogin = await auth.consumeMagicLink((await auth.createMagicLink("delete-member-route@example.com")).token);
+    await auth.close();
+    if (!memberLogin) throw new Error("failed to create member session");
+
+    cookieState.sessionToken = memberLogin.sessionToken;
+    const deleted = await DELETE_ACCOUNT();
+    const refreshedAuth = await createAuthRepository();
+    const refreshedOwner = await refreshedAuth.consumeMagicLink((await refreshedAuth.createMagicLink("team-owner@example.com")).token);
+    await refreshedAuth.close();
+    if (!refreshedOwner) throw new Error("failed to refresh owner session");
+    cookieState.sessionToken = refreshedOwner.sessionToken;
+    const list = await GET();
+    const listBody = await list.json();
+
+    expect(deleted.status).toBe(200);
+    expect(list.status).toBe(200);
+    expect(listBody.members.map((member: { email: string }) => member.email)).not.toContain("delete-member-route@example.com");
+    expect(listBody.members.map((member: { email: string }) => member.email)).toContain("team-owner@example.com");
   });
 });
 

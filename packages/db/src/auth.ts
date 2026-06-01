@@ -186,6 +186,7 @@ class SqliteAuthRepository implements AuthRepository {
           .run(JSON.stringify(accountDeletionRedactedEvidenceSummary(now)), workspace.id);
         this.db.prepare("update risk_flags set workspace_id = null, node_id = null, updated_at = ? where workspace_id = ?").run(now, workspace.id);
       }
+      this.db.prepare("delete from workspace_members where user_id = ? or email = ? or invited_by_user_id = ?").run(userId, user.email, userId);
       this.db.prepare("delete from provider_subscriptions where email = ?").run(user.email);
       this.db.prepare("delete from auth_sessions where user_id = ?").run(userId);
       this.db.prepare("delete from auth_magic_links where email = ?").run(user.email);
@@ -364,6 +365,10 @@ class PostgresAuthRepository implements AuthRepository {
         `;
         await tx`update risk_flags set workspace_id = null, node_id = null, updated_at = ${now} where workspace_id = ${workspace.id}`;
       }
+      await tx`
+        delete from workspace_members
+        where user_id = ${userId} or email = ${user.email} or invited_by_user_id = ${userId}
+      `;
       await tx`delete from provider_subscriptions where email = ${user.email}`;
       await tx`delete from auth_sessions where user_id = ${userId}`;
       await tx`delete from auth_magic_links where email = ${user.email}`;
