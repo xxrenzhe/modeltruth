@@ -13,7 +13,7 @@ This file tracks direct third-party dependencies used by ModelTruth. Internal wo
 | `esbuild` | 0.28.0 | MIT | Bundles the publishable standalone ModelTruth CLI package |
 | `tsx` | 4.22.3 | MIT | TypeScript script runner for local tooling and startup scripts |
 | `typescript` | 5.9.3 | Apache-2.0 | Type checking and build-time tooling |
-| `vitest` | 3.2.4 | MIT | Unit and integration test runner |
+| `vitest` | 4.1.8 | MIT | Unit and integration test runner |
 | `@types/node` | 22.19.19 | MIT | Node.js TypeScript definitions |
 | `@types/react` | 19.2.15 | MIT | React TypeScript definitions |
 | `@types/react-dom` | 19.2.3 | MIT | React DOM TypeScript definitions |

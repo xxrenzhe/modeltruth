@@ -13,6 +13,7 @@ type PackageJson = {
 export function validateThirdPartyNotices(root = process.cwd()) {
   const rootPackage = JSON.parse(readFileSync(path.join(root, "package.json"), "utf-8")) as PackageJson;
   const notices = readFileSync(path.join(root, "THIRD_PARTY_NOTICES.md"), "utf-8");
+  const noticeRows = parseNoticeRows(notices);
   const problems = collectPinnedVersionProblems(rootPackage);
 
   const directDependencies = [
@@ -26,8 +27,16 @@ export function validateThirdPartyNotices(root = process.cwd()) {
       license?: string;
     };
     const license = pkg.license ?? "UNKNOWN";
-    if (!notices.includes(`\`${dependency}\``)) {
+    const notice = noticeRows.get(dependency);
+    if (!notice) {
       problems.push(`${dependency} is missing from THIRD_PARTY_NOTICES.md`);
+    } else {
+      if (notice.version !== pkg.version) {
+        problems.push(`${dependency} notice version ${notice.version} does not match installed version ${pkg.version ?? "unknown"}`);
+      }
+      if (notice.license !== license) {
+        problems.push(`${dependency} notice license ${notice.license} does not match installed license ${license}`);
+      }
     }
     if (!allowedLicenses.has(license)) {
       problems.push(`${dependency}@${pkg.version ?? "unknown"} uses unsupported license ${license}`);
@@ -39,6 +48,16 @@ export function validateThirdPartyNotices(root = process.cwd()) {
     directDependencies,
     problems
   };
+}
+
+export function parseNoticeRows(notices: string) {
+  const rows = new Map<string, { version: string; license: string }>();
+  for (const line of notices.split(/\r?\n/)) {
+    const match = line.match(/^\|\s*`([^`]+)`\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|/);
+    if (!match) continue;
+    rows.set(match[1], { version: match[2].trim(), license: match[3].trim() });
+  }
+  return rows;
 }
 
 export function collectPinnedVersionProblems(rootPackage: PackageJson) {

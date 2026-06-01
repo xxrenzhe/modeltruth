@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collectPinnedVersionProblems, isPinnedSemver } from "./validate-third-party-notices";
+import { collectPinnedVersionProblems, isPinnedSemver, parseNoticeRows } from "./validate-third-party-notices";
 
 describe("third-party notice dependency pinning", () => {
   it("accepts exact semver pins, including prerelease and build metadata", () => {
@@ -51,5 +51,21 @@ describe("third-party notice dependency pinning", () => {
       "overrides.parent.child must use an exact pinned semver version, found latest",
       "typescript must use an exact pinned semver version, found ~5.9.3"
     ]);
+  });
+
+  it("parses notice table versions and licenses for exact dependency verification", () => {
+    const notices = [
+      "| Package | Version | License | Usage |",
+      "| --- | --- | --- | --- |",
+      "| `promptfoo` | 0.121.13 | MIT | Local eval runner |",
+      "| `vitest` | 4.1.8 | MIT | Test runner |"
+    ].join("\n");
+
+    expect(parseNoticeRows(notices)).toEqual(
+      new Map([
+        ["promptfoo", { version: "0.121.13", license: "MIT" }],
+        ["vitest", { version: "4.1.8", license: "MIT" }]
+      ])
+    );
   });
 });
