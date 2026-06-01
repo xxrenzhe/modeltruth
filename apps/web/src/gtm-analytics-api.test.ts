@@ -44,6 +44,26 @@ describe("GTM analytics APIs", () => {
     expect(serialized).not.toContain("/en/providers/openrouter");
   });
 
+  it("records explicit-consent CLI telemetry as anonymous aggregate traffic", async () => {
+    await setupDatabase();
+    const response = await recordVisit(jsonRequest("http://localhost/api/gtm/visit", {
+      consent: true,
+      surface: "cli",
+      visitorId: "cli_sk-secret-local-endpoint-visitor",
+      path: "https://api.example.com/v1/chat/completions"
+    }));
+    const snapshot = await buildGtmMetricsSnapshot({ now: new Date(), windowDays: 30 });
+    const serialized = JSON.stringify(snapshot);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ recorded: true });
+    expect(snapshot.launch.monthlyVisits).toBe(1);
+    expect(snapshot.launch.dashboardWeeklyActiveVisitors).toBe(0);
+    expect(serialized).not.toContain("cli_sk-secret-local-endpoint-visitor");
+    expect(serialized).not.toContain("sk-secret");
+    expect(serialized).not.toContain("api.example.com");
+  });
+
   it("does not record web visit telemetry without explicit opt-in consent", async () => {
     await setupDatabase();
     const response = await recordVisit(jsonRequest("http://localhost/api/gtm/visit", {

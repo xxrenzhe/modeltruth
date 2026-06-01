@@ -65,7 +65,7 @@ export default async function PrivacyPage({
             <li>Free Playground API keys are used only for the current run and are not written to the database or application logs.</li>
             <li>Complete request bodies, complete prompts and complete completions are not stored in evidence packages.</li>
             <li>Web visit telemetry is off by default until the visitor explicitly allows anonymous product metrics.</li>
-            <li>CLI telemetry is off by default and upload requires explicit consent.</li>
+            <li>CLI telemetry is off by default; anonymous CLI telemetry and uploads both require explicit consent.</li>
           </ul>
         </section>
         <section>
@@ -74,7 +74,7 @@ export default async function PrivacyPage({
             <li>Provide API audit, monitoring, alerting and evidence export under contract performance.</li>
             <li>Operate abuse prevention, security monitoring, reliability and product integrity under legitimate interest.</li>
             <li>Process anonymous web visit telemetry only with opt-in consent; it records coarse surfaces, not raw paths, API keys, prompts or completions.</li>
-            <li>Process CLI telemetry only with user consent, which can be withdrawn by disabling telemetry uploads.</li>
+            <li>Process CLI telemetry only with user consent; privacy-reset clears local CLI session, audit history and telemetry visitor id.</li>
           </ul>
         </section>
         <section>

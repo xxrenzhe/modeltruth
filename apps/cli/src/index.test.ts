@@ -145,6 +145,38 @@ describe("modeltruth cli", () => {
     expect(result.stderr).toContain("upload requires --consent true");
   });
 
+  it("sends anonymous CLI telemetry only after explicit consent", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "modeltruth-cli-telemetry-"));
+    const previousCliHome = process.env.MODELTRUTH_CLI_HOME;
+    process.env.MODELTRUTH_CLI_HOME = dir;
+    const fetchMock = vi.fn<(...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>>(
+      async () => new Response(JSON.stringify({ recorded: true }), { status: 200 })
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const denied = await runCli(["telemetry"], { NODE_ENV: "test" } as NodeJS.ProcessEnv);
+    const allowed = await runCli(["telemetry", "--consent", "true", "--api-base", "https://modeltruth.ai"], {
+      NODE_ENV: "test"
+    } as NodeJS.ProcessEnv);
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    const visitorFile = readFileSync(path.join(dir, "telemetry-visitor.json"), "utf8");
+
+    if (previousCliHome === undefined) delete process.env.MODELTRUTH_CLI_HOME;
+    else process.env.MODELTRUTH_CLI_HOME = previousCliHome;
+    rmSync(dir, { recursive: true, force: true });
+
+    expect(denied.exitCode).toBe(1);
+    expect(denied.stderr).toContain("telemetry requires --consent true");
+    expect(allowed.exitCode).toBe(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://modeltruth.ai/api/gtm/visit");
+    expect(body).toMatchObject({ consent: true, surface: "cli" });
+    expect(body.visitorId).toMatch(/^cli_/);
+    expect(JSON.stringify(body)).not.toContain("api.example.com");
+    expect(JSON.stringify(body)).not.toContain("sk-");
+    expect(visitorFile).toContain("modeltruth.cli-telemetry.v1");
+  });
+
   it("tracks local repeat audits for activation without storing secrets or raw endpoint URLs", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "modeltruth-cli-activation-"));
     const previousCliHome = process.env.MODELTRUTH_CLI_HOME;
@@ -254,6 +286,7 @@ describe("modeltruth cli", () => {
       path.join(dir, "audit-history.json"),
       JSON.stringify({ schemaVersion: "modeltruth.cli-audit-history.v1", endpoints: { endpoint_hash: { count: 3 } } })
     );
+    writeFileSync(path.join(dir, "telemetry-visitor.json"), JSON.stringify({ schemaVersion: "modeltruth.cli-telemetry.v1", visitorId: "cli_old" }));
     const fetchMock = vi.fn();
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
@@ -264,13 +297,15 @@ describe("modeltruth cli", () => {
     else process.env.MODELTRUTH_CLI_HOME = previousCliHome;
     const configExists = existsSync(path.join(dir, "config.json"));
     const historyExists = existsSync(path.join(dir, "audit-history.json"));
+    const telemetryExists = existsSync(path.join(dir, "telemetry-visitor.json"));
     rmSync(dir, { recursive: true, force: true });
 
     expect(result.exitCode).toBe(0);
     expect(body).toMatchObject({ reset: true });
-    expect(body.removed).toEqual(expect.arrayContaining(["config.json", "audit-history.json"]));
+    expect(body.removed).toEqual(expect.arrayContaining(["config.json", "audit-history.json", "telemetry-visitor.json"]));
     expect(configExists).toBe(false);
     expect(historyExists).toBe(false);
+    expect(telemetryExists).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

@@ -24,7 +24,7 @@ export async function POST(request: Request) {
 
 function parseSurface(value: unknown): GtmTrafficSurface {
   const surface = typeof value === "string" ? value : "";
-  if (["site", "public_dashboard", "provider_board", "playground", "pricing"].includes(surface)) {
+  if (["site", "public_dashboard", "provider_board", "playground", "pricing", "cli"].includes(surface)) {
     return surface as GtmTrafficSurface;
   }
   return "site";

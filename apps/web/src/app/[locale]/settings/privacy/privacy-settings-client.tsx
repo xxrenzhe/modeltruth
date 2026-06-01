@@ -86,7 +86,7 @@ export function PrivacySettingsClient() {
       </p>
       <p className="muted">
         CLI uploads are opt-in per command. To withdraw local CLI upload state, run{" "}
-        <code>modeltruth privacy-reset</code>; this clears the CLI session token and local audit activation history.
+        <code>modeltruth privacy-reset</code>; this clears the CLI session token, local audit activation history and telemetry visitor id.
       </p>
       <button className="button" onClick={() => void exportData()} type="button">
         Export my data

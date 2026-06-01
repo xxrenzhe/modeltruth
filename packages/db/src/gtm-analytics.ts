@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import postgres from "postgres";
 import { getAppConfig } from "@modeltruth/config";
 
-export type GtmTrafficSurface = "site" | "public_dashboard" | "provider_board" | "playground" | "pricing";
+export type GtmTrafficSurface = "site" | "public_dashboard" | "provider_board" | "playground" | "pricing" | "cli";
 export type GtmExternalMetricSource = "github_stars" | "package_downloads" | "cli_installs";
 
 export interface RecordGtmVisitInput {
@@ -142,7 +142,7 @@ function isSensitiveMetadataKey(key: string) {
 }
 
 function isTrafficSurface(value: string): value is GtmTrafficSurface {
-  return ["site", "public_dashboard", "provider_board", "playground", "pricing"].includes(value);
+  return ["site", "public_dashboard", "provider_board", "playground", "pricing", "cli"].includes(value);
 }
 
 function isExternalMetricSource(value: string): value is GtmExternalMetricSource {

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -33,11 +33,30 @@ export async function runCliWithOptions(
     if (command === "audit") return await auditCommand(flags, env, options.apiKeyReader);
     if (command === "login") return await loginCommand(flags, env);
     if (command === "upload") return await uploadCommand(flags, env);
+    if (command === "telemetry") return await telemetryCommand(flags, env);
     if (command === "privacy-reset") return privacyResetCommand();
     return { exitCode: 1, stdout: usage(), stderr: command ? `Unknown command: ${command}` : "Missing command" };
   } catch (error) {
     return { exitCode: 1, stdout: "", stderr: error instanceof Error ? error.message : String(error) };
   }
+}
+
+async function telemetryCommand(flags: Record<string, string | boolean>, env: NodeJS.ProcessEnv): Promise<CliCommandResult> {
+  if (String(flags.consent) !== "true") throw new Error("telemetry requires --consent true");
+  const apiBase = apiBaseUrl(flags, env, readCliConfig().apiBase);
+  const payload = {
+    consent: true,
+    surface: "cli",
+    visitorId: getCliTelemetryVisitorId()
+  };
+  const response = await fetch(`${apiBase}/api/gtm/visit`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const body = await response.text();
+  if (!response.ok) throw new Error(`Telemetry failed with ${response.status}: ${body}`);
+  return { exitCode: 0, stdout: JSON.stringify(parseJsonOrText(body)), stderr: "" };
 }
 
 async function auditCommand(
@@ -141,7 +160,7 @@ async function uploadCommand(flags: Record<string, string | boolean>, env: NodeJ
 }
 
 function privacyResetCommand(): CliCommandResult {
-  const removed = [configPath(), auditHistoryPath()].filter((file) => {
+  const removed = [configPath(), auditHistoryPath(), telemetryVisitorPath()].filter((file) => {
     if (!existsSync(file)) return false;
     rmSync(file, { force: true });
     return true;
@@ -295,6 +314,27 @@ function auditHistoryPath() {
   return path.join(path.dirname(configPath()), "audit-history.json");
 }
 
+function telemetryVisitorPath() {
+  return path.join(path.dirname(configPath()), "telemetry-visitor.json");
+}
+
+function getCliTelemetryVisitorId() {
+  try {
+    const parsed = JSON.parse(readFileSync(telemetryVisitorPath(), "utf8"));
+    if (parsed?.schemaVersion === "modeltruth.cli-telemetry.v1" && typeof parsed.visitorId === "string") {
+      return parsed.visitorId;
+    }
+  } catch {
+    // Missing or invalid telemetry id should be regenerated only after explicit consent.
+  }
+  const visitorId = `cli_${randomUUID()}`;
+  mkdirSync(path.dirname(telemetryVisitorPath()), { recursive: true });
+  writeFileSync(telemetryVisitorPath(), `${JSON.stringify({ schemaVersion: "modeltruth.cli-telemetry.v1", visitorId }, null, 2)}\n`, {
+    mode: 0o600
+  });
+  return visitorId;
+}
+
 function recordLocalAuditActivation(input: { baseUrl: string; model: string; suiteId: string; status: string }) {
   const now = new Date().toISOString();
   const key = createHash("sha256")
@@ -353,6 +393,7 @@ function usage() {
     "modeltruth audit --base-url https://api.example.com/v1 --model gpt-5.1 --consent-upload true",
     "modeltruth login --email you@example.com --api-base http://localhost:3000",
     "modeltruth upload --run ./modeltruth-report.json --consent true",
+    "modeltruth telemetry --consent true",
     "modeltruth privacy-reset"
   ].join("\n");
 }
