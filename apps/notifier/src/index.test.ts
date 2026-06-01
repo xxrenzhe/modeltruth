@@ -129,7 +129,7 @@ describe("deliverAlert", () => {
         workspaceId: session!.session.workspace.id,
         runId: "run_chat_alert",
         status: "fail",
-        message: "ModelTruth chat alert"
+        message: "ModelTruth chat alert Authorization: Bearer abc.def and sk-notifier-secret-123456"
       },
       async (url, init) => {
         calls.push({ url: String(url), body: String(init?.body) });
@@ -149,6 +149,9 @@ describe("deliverAlert", () => {
     expect(calls.find((call) => call.url.includes("slack"))?.body).toContain("\"text\"");
     expect(calls.find((call) => call.url.includes("discord"))?.body).toContain("\"embeds\"");
     expect(JSON.stringify(calls)).toContain("run_chat_alert");
+    expect(JSON.stringify(calls)).not.toContain("abc.def");
+    expect(JSON.stringify(calls)).not.toContain("sk-notifier-secret");
+    expect(JSON.stringify(calls)).toContain("[REDACTED]");
   });
 
   it("delivers Telegram alerts through the Telegram Bot API", async () => {

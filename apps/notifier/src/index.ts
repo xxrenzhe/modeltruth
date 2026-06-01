@@ -1,6 +1,6 @@
 import { decryptSecret } from "@modeltruth/crypto";
 import { createAlertChannelRepository, createJobRepository, ensureDatabaseReady } from "@modeltruth/db";
-import { installGracefulShutdown, writeJsonLog } from "@modeltruth/shared";
+import { installGracefulShutdown, redactLogValue, writeJsonLog } from "@modeltruth/shared";
 
 const intervalMs = Number(process.env.NOTIFIER_POLL_INTERVAL_MS ?? 5000);
 const workerId = `notifier-${process.pid}`;
@@ -137,12 +137,13 @@ async function postAlert(target: string, type: string, payload: AlertPayload, fe
 }
 
 function formatAlertBody(type: string, payload: AlertPayload, target?: string) {
-  const text = `${payload.message}${payload.runId ? ` (run ${payload.runId})` : ""}`;
-  if (type === "slack") return { text, modeltruth: payload };
-  if (type === "discord") return { content: text, embeds: [{ title: "ModelTruth Alert", description: payload.message }] };
-  if (type === "email") return { to: target, subject: "ModelTruth Alert", text, modeltruth: payload };
+  const safePayload = redactLogValue(payload) as AlertPayload;
+  const text = `${safePayload.message}${safePayload.runId ? ` (run ${safePayload.runId})` : ""}`;
+  if (type === "slack") return { text, modeltruth: safePayload };
+  if (type === "discord") return { content: text, embeds: [{ title: "ModelTruth Alert", description: safePayload.message }] };
+  if (type === "email") return { to: target, subject: "ModelTruth Alert", text, modeltruth: safePayload };
   if (type === "telegram") return { chat_id: target, text, disable_web_page_preview: true };
-  return { text, alert: payload };
+  return { text, alert: safePayload };
 }
 
 function formatProviderDigestBody(payload: ProviderDigestPayload, email: string) {

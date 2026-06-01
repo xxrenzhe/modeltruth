@@ -1,5 +1,6 @@
 import postgres from "postgres";
 import { getAppConfig } from "@modeltruth/config";
+import { safeErrorMessage } from "@modeltruth/shared";
 
 export type JobType =
   | "heartbeat"
@@ -189,7 +190,7 @@ export class SqliteJobRepository implements JobRepository {
       .prepare(
         "update jobs set status = ?, locked_at = null, locked_by = null, last_error = ?, run_after = ?, updated_at = ? where id = ?"
       )
-      .run(status, error.slice(0, 1000), runAfter.toISOString(), now, id);
+      .run(status, safeJobError(error), runAfter.toISOString(), now, id);
   }
 
   async close(): Promise<void> {
@@ -308,7 +309,7 @@ class PostgresJobRepository implements JobRepository {
       set status = case when attempts >= max_attempts then 'failed' else 'queued' end,
           locked_at = null,
           locked_by = null,
-          last_error = ${error.slice(0, 1000)},
+          last_error = ${safeJobError(error)},
           run_after = ${runAfter.toISOString()},
           updated_at = ${new Date().toISOString()}
       where id = ${id}
@@ -361,6 +362,10 @@ function resolveRetryAfter(attempts: number) {
 function resolveLeaseTimeoutMs(value?: number) {
   const candidate = value ?? Number(process.env.JOB_LEASE_TIMEOUT_MS ?? 300_000);
   return Number.isFinite(candidate) && candidate > 0 ? candidate : 300_000;
+}
+
+function safeJobError(error: string) {
+  return safeErrorMessage(error, "job failed").slice(0, 1000);
 }
 
 function mapJobRow(row: JobRow): JobRecord {

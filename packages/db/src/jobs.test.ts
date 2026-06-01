@@ -177,6 +177,24 @@ describe("JobRepository", () => {
       harness.cleanup();
     }
   });
+
+  it("redacts sensitive fragments before persisting job failure errors", async () => {
+    const harness = await createHarness();
+    const repo = await createJobRepository();
+    try {
+      const queued = await repo.enqueue({ type: "alert", payload: { workspaceId: "ws_1" } });
+      const claimed = await repo.claimNext({ workerId: "worker_1", types: ["alert"] });
+      await repo.fail(claimed!.id, "delivery failed Authorization: Bearer abc.def and sk-job-secret-123456");
+      const row = await readJobRow(harness.databasePath, queued.id);
+
+      expect(row?.last_error).not.toContain("abc.def");
+      expect(row?.last_error).not.toContain("sk-job-secret");
+      expect(row?.last_error).toContain("[REDACTED]");
+    } finally {
+      await repo.close();
+      harness.cleanup();
+    }
+  });
 });
 
 async function createHarness() {
@@ -216,8 +234,8 @@ async function readJobRow(databasePath: string, id: string) {
   const { DatabaseSync } = await import("node:sqlite");
   const db = new DatabaseSync(databasePath);
   try {
-    return db.prepare("select status, attempts, run_after from jobs where id = ?").get(id) as
-      | { status: string; attempts: number; run_after: string }
+    return db.prepare("select status, attempts, run_after, last_error from jobs where id = ?").get(id) as
+      | { status: string; attempts: number; run_after: string; last_error?: string }
       | undefined;
   } finally {
     db.close();
