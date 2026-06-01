@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { getAuditSuite, listAuditSuites, runSmokeAudit } from "./index";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createAuditTargetRateLimiter, getAuditSuite, listAuditSuites, runSmokeAudit } from "./index";
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("audit suite registry", () => {
   it("registers supported versioned suites and rejects unknown suites", () => {
@@ -445,4 +449,45 @@ describe("runSmokeAudit", () => {
 
     expect(events).toEqual(["limit:api.example.com", "fetch"]);
   });
+
+  it("serializes default limiter traffic to the same target host", async () => {
+    vi.useFakeTimers();
+    const limiter = createAuditTargetRateLimiter({ minimumIntervalMs: 50 });
+
+    await limiter.limit("API.EXAMPLE.COM");
+    const second = limiter.limit("api.example.com").then(() => "released");
+    await flushMicrotasks();
+
+    await expect(Promise.race([second, Promise.resolve("waiting")])).resolves.toBe("waiting");
+    await vi.advanceTimersByTimeAsync(49);
+    await expect(Promise.race([second, Promise.resolve("waiting")])).resolves.toBe("waiting");
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(second).resolves.toBe("released");
+  });
+
+  it("does not block independent target hosts behind each other", async () => {
+    vi.useFakeTimers();
+    const limiter = createAuditTargetRateLimiter({ minimumIntervalMs: 50 });
+
+    await limiter.limit("api-a.example.com");
+    await expect(limiter.limit("api-b.example.com")).resolves.toBeUndefined();
+  });
+
+  it("cleans completed target slots and rejects unbounded active host growth", async () => {
+    vi.useFakeTimers();
+    const limiter = createAuditTargetRateLimiter({ minimumIntervalMs: 50, maxActiveHosts: 1 });
+
+    await limiter.limit("api-a.example.com");
+    expect(limiter.trackedHostCount()).toBe(1);
+    await expect(limiter.limit("api-b.example.com")).rejects.toThrow("Audit target limiter capacity exceeded");
+
+    await vi.advanceTimersByTimeAsync(50);
+    await flushMicrotasks();
+    expect(limiter.trackedHostCount()).toBe(0);
+    await expect(limiter.limit("api-b.example.com")).resolves.toBeUndefined();
+  });
 });
+
+async function flushMicrotasks() {
+  for (let index = 0; index < 5; index += 1) await Promise.resolve();
+}

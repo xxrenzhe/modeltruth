@@ -13,6 +13,17 @@ export { estimateModelCost, findModelPricing, modelPricingTable } from "./model-
 export type { CostEstimate, ModelPricingRecord, TokenUsageLike } from "./model-pricing";
 export type { AuditSuiteDefinition, AuditSuiteId, ModelCapabilityProfile, SmokeAuditInput, SmokeAuditResult } from "./types";
 
+export interface AuditTargetRateLimiter {
+  limit(targetHost: string): Promise<void>;
+  trackedHostCount(): number;
+  clear(): void;
+}
+
+export interface AuditTargetRateLimiterOptions {
+  minimumIntervalMs?: number;
+  maxActiveHosts?: number;
+}
+
 const suiteRegistry: Record<AuditSuiteId, AuditSuiteDefinition> = {
   smoke: { suiteId: "smoke", suiteVersion: "1.0.0", public: true, maxTokens: 32 },
   "reasoning-lite": { suiteId: "reasoning-lite", suiteVersion: "1.0.0", public: false, maxTokens: 96 },
@@ -55,7 +66,7 @@ export async function runSmokeAudit(input: SmokeAuditInput): Promise<SmokeAuditR
 async function executeSuite(input: SmokeAuditInput, suite: AuditSuiteDefinition): Promise<SmokeAuditResult> {
   const startedAt = Date.now();
   const url = validateBaseUrl(input.baseUrl);
-  await (input.requestLimiter ?? throttleAuditTarget)(url.host);
+  await (input.requestLimiter ?? defaultAuditTargetRateLimiter.limit)(url.host);
   const materialized = materializeSuitePrompt(suite.suiteId, input.nonceFactory?.());
   const requestStartedAt = Date.now();
   const traceId = input.traceId ?? createTraceId();
@@ -322,26 +333,67 @@ function validateBaseUrl(baseUrl: string): URL {
   }
 }
 
-const targetAuditSlots = new Map<string, Promise<void>>();
+export function createAuditTargetRateLimiter(options: AuditTargetRateLimiterOptions = {}): AuditTargetRateLimiter {
+  const targetAuditSlots = new Map<string, { promise: Promise<void>; pending: boolean }>();
 
-async function throttleAuditTarget(targetHost: string) {
+  return {
+    limit,
+    trackedHostCount: () => targetAuditSlots.size,
+    clear: () => targetAuditSlots.clear()
+  };
+
+  async function limit(targetHost: string) {
+    const minimumIntervalMs = resolveAuditTargetMinIntervalMs(options.minimumIntervalMs);
+    if (typeof minimumIntervalMs !== "number" || !Number.isFinite(minimumIntervalMs) || minimumIntervalMs <= 0) return;
+    const normalizedHost = targetHost.trim().toLowerCase();
+    if (!normalizedHost) return;
+    reserveActiveHostSlot(targetAuditSlots, normalizedHost, options.maxActiveHosts);
+    const previous = targetAuditSlots.get(normalizedHost)?.promise ?? Promise.resolve();
+    let release = () => {};
+    let currentSlot: { promise: Promise<void>; pending: boolean };
+    const current = previous
+      .catch(() => undefined)
+      .then(
+        () =>
+          new Promise<void>((resolve) => {
+            release = resolve;
+          })
+      );
+    currentSlot = { promise: current, pending: true };
+    targetAuditSlots.set(normalizedHost, currentSlot);
+    void current.finally(() => {
+      currentSlot.pending = false;
+      if (targetAuditSlots.get(normalizedHost) === currentSlot) targetAuditSlots.delete(normalizedHost);
+    });
+    await previous.catch(() => undefined);
+    setTimeout(release, minimumIntervalMs).unref?.();
+  }
+}
+
+const defaultAuditTargetRateLimiter = createAuditTargetRateLimiter();
+
+function resolveAuditTargetMinIntervalMs(optionValue: number | undefined) {
   const defaultIntervalMs = process.env.VITEST === "true" ? 0 : 1000;
-  const minimumIntervalMs = Number(process.env.MODELTRUTH_AUDIT_TARGET_MIN_INTERVAL_MS ?? defaultIntervalMs);
+  const minimumIntervalMs = Number(optionValue ?? process.env.MODELTRUTH_AUDIT_TARGET_MIN_INTERVAL_MS ?? defaultIntervalMs);
   if (!Number.isFinite(minimumIntervalMs) || minimumIntervalMs <= 0) return;
-  const normalizedHost = targetHost.toLowerCase();
-  const previous = targetAuditSlots.get(normalizedHost) ?? Promise.resolve();
-  let release = () => {};
-  const current = previous
-    .catch(() => undefined)
-    .then(
-      () =>
-        new Promise<void>((resolve) => {
-          release = resolve;
-        })
-    );
-  targetAuditSlots.set(normalizedHost, current);
-  await previous.catch(() => undefined);
-  setTimeout(release, minimumIntervalMs).unref?.();
+  return minimumIntervalMs;
+}
+
+function reserveActiveHostSlot(
+  slots: Map<string, { promise: Promise<void>; pending: boolean }>,
+  normalizedHost: string,
+  optionValue: number | undefined
+) {
+  if (slots.has(normalizedHost)) return;
+  const maxActiveHosts = Number(optionValue ?? process.env.MODELTRUTH_AUDIT_TARGET_MAX_ACTIVE_HOSTS ?? 4096);
+  if (!Number.isFinite(maxActiveHosts) || maxActiveHosts <= 0 || slots.size < maxActiveHosts) return;
+  for (const [host, slot] of slots) {
+    if (!slot.pending) {
+      slots.delete(host);
+      if (slots.size < maxActiveHosts) return;
+    }
+  }
+  throw new Error("Audit target limiter capacity exceeded");
 }
 
 function parsedMetadata(value: unknown) {
