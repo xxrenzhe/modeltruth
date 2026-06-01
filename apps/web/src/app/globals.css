@@ -114,6 +114,12 @@ h1 {
   color: var(--ink);
 }
 
+.buttonRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .button:disabled {
   cursor: wait;
   opacity: 0.68;

@@ -73,7 +73,9 @@ const dictionaries = {
       alertTarget: "Alert webhook URL",
       addAlert: "Add alert channel",
       alertChannels: "Alert channels",
-      noAlerts: "No alert channels yet."
+      noAlerts: "No alert channels yet.",
+      billingAudit: "Run billing audit",
+      contextAudit: "Run context audit"
     },
     evidence: {
       eyebrow: "Evidence Center",
@@ -156,7 +158,9 @@ const dictionaries = {
       alertTarget: "告警 Webhook URL",
       addAlert: "添加告警渠道",
       alertChannels: "告警渠道",
-      noAlerts: "还没有告警渠道。"
+      noAlerts: "还没有告警渠道。",
+      billingAudit: "运行计费一致性审计",
+      contextAudit: "运行上下文审计"
     },
     evidence: {
       eyebrow: "Evidence Center",

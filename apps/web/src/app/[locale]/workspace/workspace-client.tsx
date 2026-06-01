@@ -19,6 +19,8 @@ interface WorkspaceLabels {
   addAlert: string;
   alertChannels: string;
   noAlerts: string;
+  billingAudit: string;
+  contextAudit: string;
 }
 
 interface ProviderNode {
@@ -241,6 +243,26 @@ export function WorkspaceClient({ labels }: { labels: WorkspaceLabels }) {
     }
   }
 
+  async function runManualAudit(nodeId: string, suiteId: string) {
+    setPending(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/workspace/audits", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ nodeId, suiteId })
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Unable to queue audit");
+      setNotice(payload.audit.duplicate ? "Audit already queued" : `Queued ${payload.audit.suiteId}`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to queue audit");
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
     <section className="workspaceGrid">
       <div className="formGrid">
@@ -389,6 +411,24 @@ export function WorkspaceClient({ labels }: { labels: WorkspaceLabels }) {
                 <p>{node.baseUrl}</p>
               </div>
               <span className="pill pass">{node.status}</span>
+              <div className="buttonRow">
+                <button
+                  className="button secondary"
+                  disabled={pending}
+                  onClick={() => void runManualAudit(node.id, "billing-lite@1.0.0")}
+                  type="button"
+                >
+                  {labels.billingAudit}
+                </button>
+                <button
+                  className="button secondary"
+                  disabled={pending}
+                  onClick={() => void runManualAudit(node.id, "context-lite@1.0.0")}
+                  type="button"
+                >
+                  {labels.contextAudit}
+                </button>
+              </div>
               <button className="button secondary" disabled={pending} onClick={() => void deleteNode(node.id)} type="button">
                 Delete node
               </button>
